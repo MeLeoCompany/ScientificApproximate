@@ -9,22 +9,22 @@ from scipy.optimize import curve_fit
 from derivative import derivatives_find
 from etl import read_points_from_file, lists_to_excel
 from find_params import find_param
-from tsallis import Tsallian, pirsonian, simple_tsallis, simple_tsallis_
+from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
 
 # Режим работы
 AUTO = True
 HM_HAND = 2.0
 
-ITERATION_DEPTH = 2 # глубина поиска пересечения с нулём
+ITERATION_DEPTH = 1 # глубина поиска пересечения с нулём
 
 # Начальные точки и будем ли аппроксимировать, а также bounds
-PIRSONIAN_MODE = False
+PIRSONIAN_MODE = True
 INITAL_AMPL_PIRS = 1.0
 INITAL_M_PIRS = 1.0
 INITAL_G_PIRS = 1.0
-BOUNDS_PIRS = ([0.0001, 0.5, 0.08], [100, 3, 10])
+BOUNDS_PIRS = ([0.0001, 0.5, 0.08], [100, 10000, 10])
 
-TSALLIAN_MODE = True
+TSALLIAN_MODE = False
 INITAL_AMPL_TSAL = 1.0
 INITAL_Q_TSAL = 2.0
 INITAL_G_TSAL = 1.0
@@ -32,8 +32,8 @@ BOUNDS_TSAL = ([0.5, 0.5, 0.08], [10, 3.0, 100])
 
 def find_dependece(q0):
 
-    dhm = 0.1
-    hm_list = np.arange(0.1, 6.0, dhm)
+    dhm = 0.05
+    hm_list = np.arange(0.05, 6.0, dhm)
     iteration = 0
 
     # Создаем таблицу куда будем добавлять результат
@@ -41,7 +41,7 @@ def find_dependece(q0):
 
     columns = []
     if PIRSONIAN_MODE:
-        columns_pirs = template.format("pirs", "M", "pirs", "pirs", "pirs").split(', ')
+        columns_pirs = (template.format("pirs", "M", "pirs", "pirs", "pirs") + ", q0, App, dHpp").split(', ')
         columns += columns_pirs
     if TSALLIAN_MODE:
         columns_tsal = template.format("tsal", "q", "tsal", "tsal", "tsal").split(', ')
@@ -86,10 +86,21 @@ def find_dependece(q0):
                 )
 
                 new_row = dict(
-                     zip(columns_tsal, [hm, params_tsal[0], params_tsal[1], params_tsal[2], msn_tsal])
+                     zip(columns_tsal, 
+                         [hm, params_tsal[0], params_tsal[1], params_tsal[2], msn_tsal, q0, tsal_cropped.dHpp])
                 )
 
                 table_result = table_result._append(new_row, ignore_index=True)
+
+                if params_tsal[1] <= 1.0:
+                    hm_intersection = hm
+                    print(f"Найдено пересечение с q=1 при q0={q0} на итерации {iteration} \n"
+                        f"Найденные параметры: hm={hm}, hm/G*={hm/params_tsal[2]}")
+                    if iteration == ITERATION_DEPTH - 1:
+                        new_row = pd.Series([q0, hm, hm/params_tsal[2]], index=tsal_intersection_result.columns)
+                        tsal_intersection_result  = tsal_intersection_result._append(new_row, ignore_index=True)
+                        return tsal_intersection_result, table_result
+                    break
 
             if PIRSONIAN_MODE:
                 params_pirs, msn_pirs = find_param(
@@ -102,23 +113,38 @@ def find_dependece(q0):
                     BOUNDS_PIRS
                 )
 
+                if params_pirs[1] >= 100:
+                    hm_intersection = hm
+                    print(f"Найдено пересечение с M=100 при q0={q0} на итерации {iteration} \n"
+                          f"Найденные параметры: hm={hm}, hm/G*={hm/params_tsal[2]}"
+                    )
+                    params_ellips, cov = curve_fit(
+                        ellips, 
+                        table_result['hm']/table_result['dHpp'], 
+                        1/table_result['Mt_pirs'],
+                        p0=[1, 1, 1, 1],
+                        method='trf',
+                        bounds=([0, 0, 0, 0], [2, 2, 2, 2])
+                    )
+                    return params_ellips, table_result
+
                 new_row = dict(
-                     zip(columns_pirs, [hm, params_pirs[0], params_pirs[1], params_pirs[2], msn_pirs])
+                     zip(columns_pirs, 
+                         [hm, params_pirs[0], params_pirs[1], params_pirs[2], 
+                          msn_pirs, q0, tsal_cropped.App, tsal_cropped.dHpp])
                 )
 
                 table_result = table_result._append(new_row, ignore_index=True)
 
+                writetype = "w" if np.where(hm_list == hm)[0] == 0 else "a"
+            
+                with open(f"params_pirsonian_q={q0}.out", f"{writetype}") as file:
+                    file.write(f"{hm:.6e}\t{params_pirs[0]:.6e}\t{params_pirs[2]:.6e}\t{params_pirs[1]:.6e}\t"
+                               f"{tsal_cropped.dHpp:.6e}\t{msn_pirs:.6e}\t{tsal_cropped.App:.6e}\t{q0:.6e}\n"
+                    )
+                
 
-            if params_tsal[1] <= 1.0:
-                hm_intersection = hm
-                print(f"Найдено пересечение с q=1 при q0={q0} на итерации {iteration} \n"
-                      f"Найденные параметры: hm={hm}, hm/G*={hm/params_tsal[2]}")
-                if iteration == ITERATION_DEPTH - 1:
-                    new_row = pd.Series([q0, hm, hm/params_tsal[2]], index=tsal_intersection_result.columns)
-                    tsal_intersection_result  = tsal_intersection_result._append(new_row, ignore_index=True)
-                    return tsal_intersection_result, table_result
-                break
-        
+
         hm_left = hm_intersection - 2*dhm
         hm_right = hm_intersection + 2*dhm
         dhm = dhm/10
@@ -127,6 +153,8 @@ def find_dependece(q0):
 
 
 def main():
+    
+    find_dependece(2.0)
 
     pool_size = 10
 
@@ -141,7 +169,7 @@ def main():
         # Вывод результатов
         print(results)
     
-    with open('results_dependence.pkl', 'wb') as f:
+    with open('results_dependence_pirs.pkl', 'wb') as f:
         pickle.dump(results, f)
         # plt.figure(figsize=(8, 5))
         # plt.scatter(hm_list, qt_list, label='Data')
@@ -168,6 +196,24 @@ def main():
     # plt.title('Curve Fitting Using Q-Gaussian Function')
     # plt.legend()
     # plt.show(block=True)
+
+        # plt.figure(figsize=(8, 5))
+        # plt.scatter(table_result['hm']/table_result['dHpp'], 1/table_result['Mt_pirs'], label='q = 2, G = 1')
+        # plt.scatter(table_result['hm']/table_result['dHpp'], list(map(lambda x: ellips(x, params_ellips[0],params_ellips[1],params_ellips[2],params_ellips[3],params_ellips[4]), table_result['hm']/table_result['dHpp'])), label='ellips')
+        # plt.text(0.1, 0.5, f"Параметры подгонки:\nP0: {params_ellips[0]}\nP1: {params_ellips[1]}\nP2: {params_ellips[2]}\nP3: {params_ellips[3]}\nP4: {params_ellips[4]}", ha='left', va='top')
+        # plt.title('Зависимость 1/')
+        # plt.legend()
+
+        # plt.figure(figsize=(8, 5))
+        # plt.scatter(table_result['hm']/table_result['dHpp'], 1/table_result['Mt_pirs'], label='q = 2, G = 1')
+        # plt.scatter(table_result['hm']/table_result['dHpp'], list(map(lambda x: ellips(x, params_ellips[0],params_ellips[1],params_ellips[2],params_ellips[3]), table_result['hm']/table_result['dHpp'])), label='ellips')
+        # plt.text(0.1, 0.5, f"Параметры подгонки:\nP2: {params_ellips[0]}\nP3: {params_ellips[1]}\nP4: {params_ellips[2]}\nP5: {params_ellips[3]}", ha='left', va='top')
+        # plt.xlabel('hm/dHpp')
+        # plt.ylabel('1/M')
+        # plt.title('Зависимость 1/M от hm/dHpp для q=2, G=1')
+        # plt.legend()
+
+
 
 if __name__=="__main__":
     main()

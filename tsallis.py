@@ -29,6 +29,8 @@ def pirsonian(x, amplt, M, G):
     St = amplt * (SS / (2.0 * f_max))
     return St
 
+def ellips(x, p2, p3, p4, p5):
+    return 0+p2*(1-((x-p4)**2)/p3)**p5
 
 @dataclass
 class Tsallian:
