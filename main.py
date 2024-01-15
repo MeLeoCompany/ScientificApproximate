@@ -5,34 +5,19 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
+    INITAL_AMPL_TSAL, INITAL_G_PIRS, INITAL_G_TSAL, INITAL_M_PIRS,\
+    INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE
 
 from derivative import derivatives_find
+from ellips_param import find_ellips_param
 from etl import read_points_from_file, lists_to_excel
 from find_params import find_param
 from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
 
-# Режим работы
-AUTO = True
-HM_HAND = 2.0
-
-ITERATION_DEPTH = 1 # глубина поиска пересечения с нулём
-
-# Начальные точки и будем ли аппроксимировать, а также bounds
-PIRSONIAN_MODE = True
-INITAL_AMPL_PIRS = 1.0
-INITAL_M_PIRS = 1.0
-INITAL_G_PIRS = 1.0
-BOUNDS_PIRS = ([0.0001, 0.5, 0.08], [100, 10000, 10])
-
-TSALLIAN_MODE = False
-INITAL_AMPL_TSAL = 1.0
-INITAL_Q_TSAL = 2.0
-INITAL_G_TSAL = 1.0
-BOUNDS_TSAL = ([0.5, 0.5, 0.08], [10, 3.0, 100])
-
 def find_dependece(q0):
 
-    dhm = 0.05
+    dhm = 0.5
     hm_list = np.arange(0.05, 6.0, dhm)
     iteration = 0
 
@@ -113,11 +98,17 @@ def find_dependece(q0):
                     BOUNDS_PIRS
                 )
 
-                if params_pirs[1] >= 100:
+                if params_pirs[1] >= 1000:
                     hm_intersection = hm
-                    print(f"Найдено пересечение с M=100 при q0={q0} на итерации {iteration} \n"
-                          f"Найденные параметры: hm={hm}, hm/G*={hm/params_tsal[2]}"
+                    print(f"Найдено пересечение с M=1000 при q0={q0} на итерации {iteration} \n"
+                          f"Найденные параметры: hm={hm}, hm/G*={hm/params_pirs[2]}"
                     )
+                    params_ellips = find_ellips_param(
+                        q0-1,
+                        table_result['hm']/table_result['dHpp'],
+                        1/table_result['Mt_pirs']
+                    )
+
                     params_ellips, cov = curve_fit(
                         ellips, 
                         table_result['hm']/table_result['dHpp'], 
@@ -213,7 +204,21 @@ def main():
         # plt.title('Зависимость 1/M от hm/dHpp для q=2, G=1')
         # plt.legend()
 
+        # def quadratic_error(variables, *args):
+        #     p2,p3,p4 = variables # p2 примерно равняетя 1/M = q-1 в относительных, p3 от 0 до 2, p4 от -0.5 до 0.5 
+        #     x =args[0]
+        #     y =args[1]
+        #     y_pred = 0+p2*(1-((x-p4)/p3)**2)**0.5
+        #     return np.sum((y - y_pred) ** 2)
 
+        # initial_guess = [1, 1, 0.5]  # Начальное приближение для параметров a и b
+        # bounds = bounds = [(0.001, 2), (0.01, 2), (0.01, 2)]
+        # result = minimize(quadratic_error, initial_guess, method='L-BFGS-B', args=(df['col1'][:370]/df['col5'][:370], 1/df['col4'][:370]), bounds=bounds,  options={'maxfun': 500000, 'maxiter': 50000000, 'ftol': 1e-7, 'gtol': 1e-5})
+
+        # import pandas as pd
+
+        # # Загрузка данных из файла
+        # df = pd.read_csv('param_mtc_s_p(s2a4)(q=3, G=1).out', sep='\t', names=['col1', 'col2', 'col3', 'col4', 'col5', 'col6', 'col7', 'col8'])
 
 if __name__=="__main__":
     main()

@@ -4,6 +4,8 @@ import numpy as np
 import scipy.special as sp
 from scipy.integrate import quad
 
+from consts import PEAK_TO_PEAK_RECURSION_DEPTH
+
 def simple_tsallis(x, amplt, q, G):
     H_0 = 3250.0
     a1 = pow(2.0, q - 1.0) - 1.0
@@ -79,6 +81,22 @@ class Tsallian:
         beta = sp.beta(0.5, 1.0 / (self.q - 1.0) - 0.5)
         f_max = np.sqrt(tmp_1) / (self.G * beta)
         self.Hd = np.linspace(Hd, self.H_0 - self.H_left, self.N)
+
+        self.Y, Hd_left, Hd_right = self.find_sperctr(self.N, self.Hd, f_max, tmp_1)
+
+        dHd = self.Hd[1] - self.Hd[0]
+        Hd_list_left_peak = np.linspace(Hd_left-dHd, Hd_left+dHd, self.N//2)
+        Hd_list_right_peak = np.linspace(Hd_right-dHd, Hd_right+dHd, self.N//2)
+        Hd_list = np.hstack((Hd_list_left_peak, Hd_list_right_peak))
+
+        self.find_spectr_param_recursion(
+            self.N,
+            Hd_list,
+            f_max,
+            tmp_1,
+            PEAK_TO_PEAK_RECURSION_DEPTH
+        )
+
         i = 0
         for Hd in self.Hd:
             integrand = partial(self.integral, tmp1=tmp_1, Hd=Hd)
@@ -92,11 +110,50 @@ class Tsallian:
         self.B = self.Hd + self.H_0
         return self
 
+
+    def find_sperctr(
+        self: 'Tsallian',
+        N: int,
+        Hd_list: np.ndarray,
+        f_max: float,
+        tmp_1: float
+    ):
+        Y = np.zeros(N, dtype=float)
+        i = 0
+        for Hd in Hd_list:
+            integrand = partial(self.integral, tmp1=tmp_1, Hd=Hd)
+            result, _ = quad(integrand, -np.pi, np.pi)
+            Y[i] = result * f_max
+            i +=1
+        return Y, Hd_list[np.argmax(Y)], Hd_list[np.argmin(Y)]
+
+
+    def find_spectr_param_recursion(
+        self: 'Tsallian',
+        N: int,
+        Hd_list: np.ndarray,
+        f_max: float,
+        tmp_1: float,
+        recursion_depth_const: int
+    ):
+        Y, Hd_left, Hd_right = self.find_sperctr(N, Hd_list, f_max, tmp_1)
+        if recursion_depth_const == 0:
+            self.App = np.max(Y) - np.min(Y)
+            self.dHpp = Hd_list[np.argmin(Y)] - Hd_list[np.argmax(Y)]
+            return None
+        dHd = Hd_list[1] - Hd_list[0]
+        Hd_list_left_peak = np.linspace(Hd_left-dHd, Hd_left+dHd, N//2)
+        Hd_list_right_peak = np.linspace(Hd_right-dHd, Hd_right+dHd, N//2)
+        Hd_list = np.hstack((Hd_list_left_peak, Hd_list_right_peak))
+        recursion_depth_const -= 1
+        self.find_spectr_param_recursion(N, Hd_list, f_max, tmp_1, recursion_depth_const)
+        
+
     def integral(
-            self: 'Tsallian',
-            x: float,
-            tmp1: float,
-            Hd: float
+        self: 'Tsallian',
+        x: float,
+        tmp1: float,
+        Hd: float
     ):
         tmp2 = (Hd + 0.5 * self.hm * np.sin(x)) / self.G
         res = np.sin(x) * pow(1.0 + tmp1 * tmp2 * tmp2, -1.0 / (self.q - 1.0))
