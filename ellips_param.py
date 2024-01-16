@@ -58,13 +58,13 @@ def find_ellips_param(
             continue
     
     if success == True:
-        print(f'Для M={q0} найдено решение аппроксимации эллипсоидом: параметры \n'
+        print(f'Для M={q0:.3f} найдено решение аппроксимации эллипсоидом: параметры \n'
               f'{orimize_p2, orimize_p3, orimize_p4}\n')
         # сохраняем график
         plt.figure(figsize=(8, 5))
         plt.scatter(X_list, Y_list, label='Исходные данные')
         plt.scatter(X_list, result.x[0]*(1-((X_list-result.x[2])/result.x[1])**2)**0.5, label='Эллипсоид')
-        plt.title(f'Аппроксимация эллипсоидом зависимости 1/M от hm/dHpp при q={q0}')
+        plt.title(f'Аппроксимация эллипсоидом зависимости 1/M от hm/dHpp при q={q0:.3f}')
         plt.text(
             min(X_list)+(max(X_list)-min(X_list))/10, 
             min(Y_list)+(max(Y_list)-min(Y_list))/3, 
@@ -74,10 +74,10 @@ def find_ellips_param(
         plt.xlabel('hm/dHpp')
         plt.ylabel('1/M')
         plt.legend()
-        plt.savefig(f'graphs_ellipsoid(q)/ellips_approximate_q={q0}.png')
+        plt.savefig(f'graphs_ellipsoid(q)/ellips_approximate_q={q0:.3f}.png')
         plt.close()
         return [orimize_p2, orimize_p3, orimize_p4, result.fun]
     else:
-        print(f'Решение для M={q0} не удалось найти')
+        print(f'Решение для M={q0:.3f} не удалось найти')
         return [-1, -1, -1 ,-1]
 
