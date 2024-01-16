@@ -170,3 +170,4 @@ tests/resources/EQPIP-787af979-ef42-408a-996c-6ba8099ef245.json
 *.png
 *.pkl
 *.inp
+*.out

@@ -136,7 +136,7 @@ def find_dependece(q0):
 
                 writetype = "w" if np.where(hm_list == hm)[0] == 0 else "a"
             
-                with open(f"params_pirs_data(q)/params_pirsonian_q={q0}.out", f"{writetype}") as file:
+                with open(f"params_pirs_data(q)/params_pirsonian_q={q0:.3f}.out", f"{writetype}") as file:
                     file.write(f"{hm:.6e}\t{params_pirs[0]:.6e}\t{params_pirs[2]:.6e}\t{params_pirs[1]:.6e}\t"
                                f"{tsal_cropped.dHpp:.6e}\t{msn_pirs:.6e}\t{tsal_cropped.App:.6e}\t{q0:.6e}\n"
                     )
