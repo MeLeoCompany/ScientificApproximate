@@ -18,7 +18,7 @@ from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
 def find_dependece(q0):
 
     dhm = 0.5
-    hm_list = np.arange(0.05, 6.0, dhm)
+    hm_list = np.hstack((np.arange(0.05, 2.0, 0.05), np.arange(2.05, 5.0, 0.1)))
     iteration = 0
 
     # Создаем таблицу куда будем добавлять результат
@@ -34,6 +34,7 @@ def find_dependece(q0):
 
     table_result = pd.DataFrame(columns=columns)
     tsal_intersection_result = pd.DataFrame(columns=['q0', 'hm', 'hm/G*'])
+    ellips_param_result = pd.DataFrame(columns=['q0', 'p2', 'p3', 'p4', 'mse'])
 
     while (iteration < ITERATION_DEPTH):
 
@@ -109,15 +110,21 @@ def find_dependece(q0):
                         1/table_result['Mt_pirs']
                     )
 
-                    params_ellips, cov = curve_fit(
-                        ellips, 
-                        table_result['hm']/table_result['dHpp'], 
-                        1/table_result['Mt_pirs'],
-                        p0=[1, 1, 1, 1],
-                        method='trf',
-                        bounds=([0, 0, 0, 0], [2, 2, 2, 2])
+                    new_row = pd.Series(
+                        [q0, params_ellips[0], params_ellips[1], params_ellips[2], params_ellips[3]], 
+                        index=ellips_param_result.columns
                     )
-                    return params_ellips, table_result
+                    ellips_param_result  = ellips_param_result._append(new_row, ignore_index=True)
+
+                    # params_ellips, cov = curve_fit(
+                    #     ellips, 
+                    #     table_result['hm']/table_result['dHpp'], 
+                    #     1/table_result['Mt_pirs'],
+                    #     p0=[1, 1, 1, 1],
+                    #     method='trf',
+                    #     bounds=([0, 0, 0, 0], [2, 2, 2, 2])
+                    # )
+                    return ellips_param_result, table_result
 
                 new_row = dict(
                      zip(columns_pirs, 
@@ -129,7 +136,7 @@ def find_dependece(q0):
 
                 writetype = "w" if np.where(hm_list == hm)[0] == 0 else "a"
             
-                with open(f"params_pirsonian_q={q0}.out", f"{writetype}") as file:
+                with open(f"params_pirs_data(q)/params_pirsonian_q={q0}.out", f"{writetype}") as file:
                     file.write(f"{hm:.6e}\t{params_pirs[0]:.6e}\t{params_pirs[2]:.6e}\t{params_pirs[1]:.6e}\t"
                                f"{tsal_cropped.dHpp:.6e}\t{msn_pirs:.6e}\t{tsal_cropped.App:.6e}\t{q0:.6e}\n"
                     )
@@ -145,7 +152,7 @@ def find_dependece(q0):
 
 def main():
     
-    find_dependece(2.0)
+    # find_dependece(2.0)
 
     pool_size = 10
 
@@ -160,7 +167,7 @@ def main():
         # Вывод результатов
         print(results)
     
-    with open('results_dependence_pirs.pkl', 'wb') as f:
+    with open('results_ellipses_pirs_distortion.pkl', 'wb') as f:
         pickle.dump(results, f)
         # plt.figure(figsize=(8, 5))
         # plt.scatter(hm_list, qt_list, label='Data')
