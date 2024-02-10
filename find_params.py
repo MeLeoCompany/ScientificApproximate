@@ -1,17 +1,23 @@
 
+from functools import partial
+from matplotlib import pyplot as plt
 import numpy as np
+import optuna
 from scipy.optimize import curve_fit
+from scipy.optimize import minimize
+import torch
 
-from tsallis import pirsonian
+from tsallis import pirsonian, simple_tsallis_, simple_tsallis_torch
+
 
 def find_param(
     hm,
     func,
-    initial_ampl, # параметры начальной точки
+    initial_ampl,  # параметры начальной точки
     initial_qM,
     inital_G,
     tsal_cropped,
-    bounds # искаженный обрезанный тцаллиан
+    bounds  # искаженный обрезанный тцаллиан
 ):
 
     # Задаем начальную точку: ampl, q(или M в случае пирсониана), G
@@ -21,11 +27,11 @@ def find_param(
         inital_G
     ]
 
-    # Создаем шаблон функции, в который поместим пирсониан и/или тцаллиан в зависимости от мода 
+    # Создаем шаблон функции, в который поместим пирсониан и/или тцаллиан в зависимости от мода
     params, cov = curve_fit(
         func,
-        tsal_cropped.B, 
-        tsal_cropped.Y_norm, 
+        tsal_cropped.B,
+        tsal_cropped.Y_norm,
         p0=initial_guess,
         method='trf',
         bounds=bounds
@@ -38,8 +44,157 @@ def find_param(
     msn = np.mean((tsal_cropped.Y_norm - fitted_y) ** 2)
 
     type_func = "пирсониана" if func == pirsonian else "тцаллиана"
-    
+
     print(f"Параметры {type_func}:\n"
           f"hm={hm:.3f}, qt={qt:.4f}, Gt={Gt:.2f}, amplt={amplt:.2f}, msn={msn:.8f}")
-    
+
     return params, msn
+
+
+def quadratic_error(variables, *args):
+    G1, q1, Bres1, Ampl1, G2, q2, Bres2, Ampl2, c = variables
+    x = args[0]
+    y = args[1]
+    y_pred = simple_tsallis_(x, q1, G1, Bres1, Ampl1, 0) + simple_tsallis_(x, q2, G2, Bres2, Ampl2, 0) + c
+    return np.sum((y - y_pred) ** 2)/np.size(y_pred)
+
+
+opt = 1000000
+q1opt = None,
+G1opt = None,
+Bres1opt = None,
+Ampl1opt = None,
+q2opt = None,
+G2opt = None,
+Bres2opt = None,
+Ampl2opt = None,
+copt = None
+
+
+def objective(trial, x_data, y_data):
+    G1 = trial.suggest_float("G1", 0, 4)
+    q1 = trial.suggest_float("q1", 1, 3)
+    Bres1 = trial.suggest_float("Bres1", 3245, 3260)
+    Ampl1 = trial.suggest_float("Ampl1", 20, 300)
+    G2 = trial.suggest_float("G2", 0, 4)
+    q2 = trial.suggest_float("q2", 1, 3)
+    Bres2 = trial.suggest_float("Bres2", 3245, 3260)
+    Ampl2 = trial.suggest_float("Ampl2", 20, 300)
+    c = trial.suggest_float("c", -10, 10)
+    predefined_values = [q1, G1, Bres1, Ampl1, q2, G2, Bres2, Ampl2, c]
+    return find_loss(torch.from_numpy(x_data.values), torch.from_numpy(y_data.values), predefined_values)
+
+
+def check_stop(study, trial):
+    if study.best_value < 5:
+        study.stop()
+
+
+def find_loss(x_data, y_data, predefined_values):
+
+    q1, G1, Bres1, Ampl1, q2, G2, Bres2, Ampl2, c = [
+        torch.tensor([value], dtype=torch.float32, requires_grad=True) for value in predefined_values
+    ]
+    global opt
+    global q1opt, G1opt, Bres1opt, Ampl1opt, q2opt, G2opt, Bres2opt, Ampl2opt, copt
+    optimizer = torch.optim.SGD([q1, G1, Bres1, Ampl1, q2, G2, Bres2, Ampl2, c], lr=0.01)
+    # Цикл обучения
+    for epoch in range(100):
+        optimizer.zero_grad()
+        y_pred = simple_tsallis_torch(x_data, q1, G1, Bres1, Ampl1, 0) + \
+            simple_tsallis_torch(x_data, q2, G2, Bres2, Ampl2, 0) + c
+        output_new = torch.sum((y_data - y_pred) ** 2) / y_pred.numel()
+        if output_new < opt:
+            q1opt, G1opt, Bres1opt, Ampl1opt, q2opt, G2opt, Bres2opt, Ampl2opt, copt = \
+                q1.item(), G1.item(), Bres1.item(), Ampl1.item(), \
+                q2.item(), G2.item(), Bres2.item(), Ampl2.item(), c.item()
+            opt = output_new
+            print(opt, "\n",
+                  q1opt, G1opt, Bres1opt, Ampl1opt, q2opt, G2opt, Bres2opt, Ampl2opt, copt)
+        output_new.backward()
+        optimizer.step()
+
+    return opt
+
+
+def find_two_tsall_param(
+    experimental_spectr
+):
+    X_list = experimental_spectr['B']
+    Y_list = experimental_spectr['Signal']
+    objective_with_data = partial(objective, x_data=X_list, y_data=Y_list)
+    study = optuna.create_study(direction="minimize", sampler=optuna.samplers.RandomSampler())
+    study.optimize(objective_with_data, n_trials=5000, callbacks=[check_stop])
+
+    plt.figure(figsize=(8, 5))
+    plt.scatter(X_list, Y_list, label='Исходные данные')
+    plt.scatter(
+        X_list,
+        simple_tsallis_(
+                    X_list, q2opt, G2opt,
+                    Bres2opt, Ampl2opt, 0),
+        label=''
+    )
+    plt.text(3200, -80, f"Параметры подгонки:\nq2={q2opt}\nG2opt={G2opt}"
+             f"\nB2={Bres2opt}\nAmpl2opt={Ampl2opt}")
+
+    plt.figure(figsize=(8, 5))
+    plt.scatter(X_list, Y_list, label='Исходные данные')
+    plt.scatter(
+        X_list,
+        simple_tsallis_(
+                    X_list, q1opt, G1opt,
+                    Bres1opt, Ampl1opt, 0),
+        label=''
+    )
+    plt.text(3200, -80, f"Параметры подгонки:\nq1={q1opt}\nG1opt={G1opt}"
+             f"\nB1={Bres1opt}\nAmpl1opt={Ampl1opt}")
+
+    plt.figure(figsize=(8, 5))
+    plt.scatter(X_list, Y_list, label='Исходные данные')
+    plt.scatter(
+        X_list,
+        simple_tsallis_(
+                    X_list, q1opt, G1opt,
+                    Bres1opt, Ampl1opt, 0) +
+        simple_tsallis_(
+                    X_list, q2opt, G2opt,
+                    Bres1opt, Ampl2opt, 0) + copt,
+        label=''
+    )
+    # print("Лучшие параметры:", study.best_params)
+
+    # G_0 = 2
+    # q_0 = 2
+    # B_0 = 3250
+    # Ampl_0 = 100
+    # dG = 1
+    # dq = 1
+    # dB = 10
+    # dAmp = 50
+    # c = 1
+    # initial_guess = [G_0, q_0, B_0, Ampl_0, G_0, q_0, B_0, Ampl_0, c]
+    # bounds = [
+    #     (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+    #     (B_0-dB, B_0+dB), (Ampl_0-dAmp, Ampl_0+dAmp),
+    #     (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+    #     (B_0-dB, B_0+dB), (Ampl_0-dAmp, Ampl_0+dAmp),
+    #     (c-10, c+10)]
+
+    # res = minimize(
+    #     quadratic_error,
+    #     initial_guess,
+    #     args=(X_list, Y_list),
+    #     bounds=bounds,
+    #     options={
+    #         'maxfun': 500000,
+    #         'maxiter': 50000000,
+    #         'ftol': 1e-6
+    #     }
+    # )
+
+    # plt.figure(figsize=(8, 5))
+    # plt.scatter(X_list, Y_list, label='Исходные данные')
+    # plt.scatter(X_list, simple_tsallis_(X_list, res.x[1], res.x[0], res.x[2], res.x[3], 0) +
+    #             simple_tsallis_(X_list, res.x[5], res.x[4], res.x[6], res.x[7], 0) + res.x[8], label='')
+    return None

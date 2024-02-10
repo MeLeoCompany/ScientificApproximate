@@ -6,14 +6,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
-    INITAL_AMPL_TSAL, INITAL_G_PIRS, INITAL_G_TSAL, INITAL_M_PIRS,\
-    INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE
+    INITAL_AMPL_TSAL, INITAL_G_PIRS, INITAL_G_TSAL, INITAL_M_PIRS, \
+    INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE, TWO_TSALLIAN_MANUAL_MODE
 
 from derivative import derivatives_find
 from ellips_param import find_ellips_param
 from etl import read_points_from_file, lists_to_excel
-from find_params import find_param
+from find_params import find_param, find_two_tsall_param
 from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
+
 
 def find_dependece(q0):
 
@@ -31,6 +32,17 @@ def find_dependece(q0):
     if TSALLIAN_MODE:
         columns_tsal = template.format("tsal", "q", "tsal", "tsal", "tsal").split(', ')
         columns += columns_tsal
+    if TWO_TSALLIAN_MANUAL_MODE:
+        columns_tsal = "ampl_1, qt_1, Gt_1, Bres_1, msn_1, ampl_2, qt_2, Gt_2, Bres_2, msn_2, "
+        columns += columns_tsal
+
+    if TWO_TSALLIAN_MANUAL_MODE:
+        experimental_spectr = pd.read_csv(
+            'series-3250-100-pw=10-rg=5-ma=0,1.dat', sep='\t',
+            names=['B', 'Signal'])
+        find_two_tsall_param(
+            experimental_spectr,
+        )
 
     table_result = pd.DataFrame(columns=columns)
     tsal_intersection_result = pd.DataFrame(columns=['q0', 'hm', 'hm/G*'])
@@ -42,12 +54,12 @@ def find_dependece(q0):
 
             # Параметры для Тцаллиана, который будет искажаться
             params = {
-                "Number of points": 10000, 
-                "q": q0, 
-                "G": 1.0, 
-                "H_0": 3250.0, 
-                "H_left": 3230.0, 
-                "hm": hm, 
+                "Number of points": 10000,
+                "q": q0,
+                "G": 1.0,
+                "H_0": 3250.0,
+                "H_left": 3230.0,
+                "hm": hm,
                 "distortion": True
             }
 
@@ -72,8 +84,9 @@ def find_dependece(q0):
                 )
 
                 new_row = dict(
-                     zip(columns_tsal, 
-                         [hm, params_tsal[0], params_tsal[1], params_tsal[2], msn_tsal, q0, tsal_cropped.dHpp])
+                     zip(columns_tsal,
+                         [hm, params_tsal[0], params_tsal[1], params_tsal[2],
+                          msn_tsal, q0, tsal_cropped.dHpp])
                 )
 
                 table_result = table_result._append(new_row, ignore_index=True)
@@ -81,10 +94,10 @@ def find_dependece(q0):
                 if params_tsal[1] <= 1.0:
                     hm_intersection = hm
                     print(f"Найдено пересечение с q=1 при q0={q0} на итерации {iteration} \n"
-                        f"Найденные параметры: hm={hm}, hm/G*={hm/params_tsal[2]}")
+                          f"Найденные параметры: hm={hm}, hm/G*={hm/params_tsal[2]}")
                     if iteration == ITERATION_DEPTH - 1:
                         new_row = pd.Series([q0, hm, hm/params_tsal[2]], index=tsal_intersection_result.columns)
-                        tsal_intersection_result  = tsal_intersection_result._append(new_row, ignore_index=True)
+                        tsal_intersection_result = tsal_intersection_result._append(new_row, ignore_index=True)
                         return tsal_intersection_result, table_result
                     break
 
@@ -102,8 +115,7 @@ def find_dependece(q0):
                 if params_pirs[1] >= 1000:
                     hm_intersection = hm
                     print(f"Найдено пересечение с M=1000 при q0={q0} на итерации {iteration} \n"
-                          f"Найденные параметры: hm={hm}, hm/G*={hm/params_pirs[2]}"
-                    )
+                          f"Найденные параметры: hm={hm}, hm/G*={hm/params_pirs[2]}")
                     params_ellips = find_ellips_param(
                         q0-1,
                         table_result['hm']/table_result['dHpp'],
@@ -111,14 +123,14 @@ def find_dependece(q0):
                     )
 
                     new_row = pd.Series(
-                        [q0, params_ellips[0], params_ellips[1], params_ellips[2], params_ellips[3]], 
+                        [q0, params_ellips[0], params_ellips[1], params_ellips[2], params_ellips[3]],
                         index=ellips_param_result.columns
                     )
-                    ellips_param_result  = ellips_param_result._append(new_row, ignore_index=True)
+                    ellips_param_result = ellips_param_result._append(new_row, ignore_index=True)
 
                     # params_ellips, cov = curve_fit(
-                    #     ellips, 
-                    #     table_result['hm']/table_result['dHpp'], 
+                    #     ellips,
+                    #     table_result['hm']/table_result['dHpp'],
                     #     1/table_result['Mt_pirs'],
                     #     p0=[1, 1, 1, 1],
                     #     method='trf',
@@ -127,21 +139,20 @@ def find_dependece(q0):
                     return ellips_param_result, table_result
 
                 new_row = dict(
-                     zip(columns_pirs, 
-                         [hm, params_pirs[0], params_pirs[1], params_pirs[2], 
+                     zip(columns_pirs,
+                         [hm, params_pirs[0], params_pirs[1], params_pirs[2],
                           msn_pirs, q0, tsal_cropped.App, tsal_cropped.dHpp])
                 )
 
                 table_result = table_result._append(new_row, ignore_index=True)
 
                 writetype = "w" if np.where(hm_list == hm)[0] == 0 else "a"
-            
-                with open(f"params_pirs_data(q)/params_pirsonian_q={q0:.3f}.out", f"{writetype}") as file:
-                    file.write(f"{hm:.6e}\t{params_pirs[0]:.6e}\t{params_pirs[2]:.6e}\t{params_pirs[1]:.6e}\t"
-                               f"{tsal_cropped.dHpp:.6e}\t{msn_pirs:.6e}\t{tsal_cropped.App:.6e}\t{q0:.6e}\n"
-                    )
-                
 
+                with open(f"params_pirs_data(q)/params_pirsonian_q={q0:.3f}.out", f"{writetype}") as file:
+                    file.write(
+                        f"{hm:.6e}\t{params_pirs[0]:.6e}\t{params_pirs[2]:.6e}\t{params_pirs[1]:.6e}\t"
+                        f"{tsal_cropped.dHpp:.6e}\t{msn_pirs:.6e}\t{tsal_cropped.App:.6e}\t{q0:.6e}\n"
+                    )
 
         hm_left = hm_intersection - 2*dhm
         hm_right = hm_intersection + 2*dhm
@@ -151,8 +162,8 @@ def find_dependece(q0):
 
 
 def main():
-    
-    # find_dependece(2.0)
+
+    find_dependece(2.0)
 
     pool_size = 10
 
@@ -166,7 +177,7 @@ def main():
 
         # Вывод результатов
         print(results)
-    
+
     with open('results_ellipses_pirs_distortion.pkl', 'wb') as f:
         pickle.dump(results, f)
         # plt.figure(figsize=(8, 5))
@@ -227,5 +238,6 @@ def main():
         # # Загрузка данных из файла
         # df = pd.read_csv('param_mtc_s_p(s2a4)(q=3, G=1).out', sep='\t', names=['col1', 'col2', 'col3', 'col4', 'col5', 'col6', 'col7', 'col8'])
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()

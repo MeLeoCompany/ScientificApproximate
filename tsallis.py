@@ -3,8 +3,10 @@ from functools import partial
 import numpy as np
 import scipy.special as sp
 from scipy.integrate import quad
+import torch
 
 from consts import PEAK_TO_PEAK_RECURSION_DEPTH
+
 
 def simple_tsallis(x, amplt, q, G):
     H_0 = 3250.0
@@ -15,6 +17,7 @@ def simple_tsallis(x, amplt, q, G):
     St = amplt * SS / (2.0 * f_max)
     return St
 
+
 def simple_tsallis_(x, q, G, H_0, Yt, dY):
     a1 = pow(2.0, q - 1.0) - 1.0
     a2 = -1.0 / (q - 1.0)
@@ -23,13 +26,29 @@ def simple_tsallis_(x, q, G, H_0, Yt, dY):
     St = Yt * (SS / (2.0 * f_max)) + dY
     return St
 
+
+def simple_tsallis_torch(x, q, G, H_0, Yt, dY):
+    if not (torch.tensor(1.0) <= q <= torch.tensor(3.0)) or \
+       not (torch.tensor(0) <= G <= torch.tensor(4.0)) or \
+       not (torch.tensor(3245) <= H_0 <= torch.tensor(3260)) or \
+       not (torch.tensor(20) <= Yt <= torch.tensor(300)):
+        return torch.tensor([float('inf')])
+    a1 = torch.pow(2.0, q - 1.0) - 1.0
+    a2 = -1.0 / (q - 1.0)
+    SS = 2.0 * a2 * torch.pow(1.0 + a1 * torch.pow((x - H_0) / G, 2.0), a2 - 1.0) * a1 * ((x - H_0) / torch.pow(G, 2))
+    f_max = torch.max(SS)
+    St = Yt * (SS / (2.0 * f_max)) + dY
+    return St
+
+
 def pirsonian(x, amplt, M, G):
     H_0 = 3250.0
     a1 = pow(2, 1.0 / M) - 1.0
-    SS = - ((x- H_0) / G**2) * np.power(1 + a1* np.power((x - H_0)/G , 2), -M-1)
+    SS = - ((x - H_0) / G**2) * np.power(1 + a1 * np.power((x - H_0)/G, 2), -M-1)
     f_max = np.max(SS)
     St = amplt * (SS / (2.0 * f_max))
     return St
+
 
 def ellips(x, p2, p3, p4):
     return 0+p2*(1-((x-p4)**2)/p3)**0.5
@@ -62,7 +81,7 @@ class Tsallian:
     def tsall_init(
             N: int,
             q: float,
-            G: float, 
+            G: float,
             H_0: float,
             H_left: float,
             hm: float = None,
