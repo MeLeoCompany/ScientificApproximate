@@ -6,7 +6,7 @@ import optuna
 from scipy.optimize import curve_fit
 from scipy.optimize import minimize
 import torch
-
+from optuna.samplers import RandomSampler, CmaEsSampler, TPESampler
 from tsallis import pirsonian, simple_tsallis_, simple_tsallis_torch
 
 
@@ -52,11 +52,85 @@ def find_param(
 
 
 def quadratic_error(variables, *args):
+    G1, q1, Bres1, Ampl1 = variables
+    x = args[0]
+    y = args[1]
+    y_pred = simple_tsallis_(x, q1, G1, Bres1, Ampl1, 0)
+    return np.sum((y - y_pred) ** 2)/np.size(y_pred)
+
+
+def quadratic_error_two(variables, *args):
     G1, q1, Bres1, Ampl1, G2, q2, Bres2, Ampl2, c = variables
     x = args[0]
     y = args[1]
     y_pred = simple_tsallis_(x, q1, G1, Bres1, Ampl1, 0) + simple_tsallis_(x, q2, G2, Bres2, Ampl2, 0) + c
     return np.sum((y - y_pred) ** 2)/np.size(y_pred)
+
+
+def objective_two(trial, x_data, y_data):
+    B_0 = trial.suggest_float("B1", 3250, 3261)
+    B_1 = trial.suggest_float("B2", 3250, 3261)
+    G_0 = 2
+    q_0 = 2
+    Ampl_0 = 0.5
+    dG = 1
+    dq = 0.99999
+    dB = 0.5
+    dAmp = 0.49999
+
+    initial_guess = [G_0, q_0, B_0, Ampl_0]
+    bounds = [
+        (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+        (B_0-dB, B_0+dB), (Ampl_0-dAmp, Ampl_0+dAmp)
+    ]
+
+    res = minimize(
+        quadratic_error,
+        initial_guess,
+        args=(x_data, y_data),
+        bounds=bounds,
+        method='L-BFGS-B',
+        options={
+            'maxfun': 500000,
+            'maxiter': 50000000,
+            'ftol': 1e-6
+        }
+    )
+
+    G_0 = 2
+    q_0 = 2
+    Ampl_0 = 0.5
+    dG = 1
+    dq = 0.999999
+    dB = 0.5
+    dAmp = 0.4999999
+    c = 0
+    dc = 0.5
+    initial_guess = [res.x[0], res.x[1], res.x[2], res.x[3], G_0, q_0, B_1, Ampl_0, c]
+    bounds = [
+        (res.x[0]-dG, res.x[0]+dG), (res.x[1]-dq, res.x[1]+dq),
+        (res.x[2]-dB, res.x[2]+dB), (res.x[3]-dAmp, res.x[3]+dAmp),
+        (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+        (B_1-dB, B_1+dB), (Ampl_0-dAmp, Ampl_0+dAmp),
+        (c-dc, c+dc)
+    ]
+
+    res = minimize(
+        quadratic_error_two,
+        initial_guess,
+        args=(x_data, y_data),
+        bounds=bounds,
+        method='L-BFGS-B',
+        options={
+            'maxfun': 500000,
+            'maxiter': 50000000,
+            'ftol': 1e-6
+        }
+    )
+    if len(trial.study.best_trials):
+        if res.fun < trial.study.best_value:
+            trial.set_user_attr("res", res)
+    return res.fun
 
 
 opt = 1000000
@@ -75,18 +149,18 @@ def objective(trial, x_data, y_data):
     G1 = trial.suggest_float("G1", 0, 4)
     q1 = trial.suggest_float("q1", 1, 3)
     Bres1 = trial.suggest_float("Bres1", 3245, 3260)
-    Ampl1 = trial.suggest_float("Ampl1", 20, 300)
+    Ampl1 = trial.suggest_float("Ampl1", 0, 1)
     G2 = trial.suggest_float("G2", 0, 4)
     q2 = trial.suggest_float("q2", 1, 3)
     Bres2 = trial.suggest_float("Bres2", 3245, 3260)
-    Ampl2 = trial.suggest_float("Ampl2", 20, 300)
+    Ampl2 = trial.suggest_float("Ampl2", 0, 1)
     c = trial.suggest_float("c", -10, 10)
     predefined_values = [q1, G1, Bres1, Ampl1, q2, G2, Bres2, Ampl2, c]
     return find_loss(torch.from_numpy(x_data.values), torch.from_numpy(y_data.values), predefined_values)
 
 
 def check_stop(study, trial):
-    if study.best_value < 5:
+    if study.best_value < 3.5e-5:
         study.stop()
 
 
@@ -121,47 +195,51 @@ def find_two_tsall_param(
     experimental_spectr
 ):
     X_list = experimental_spectr['B']
-    Y_list = experimental_spectr['Signal']
-    objective_with_data = partial(objective, x_data=X_list, y_data=Y_list)
-    study = optuna.create_study(direction="minimize", sampler=optuna.samplers.RandomSampler())
-    study.optimize(objective_with_data, n_trials=5000, callbacks=[check_stop])
+    Y_list = experimental_spectr['Signal']/(max(experimental_spectr['Signal']) - min(experimental_spectr['Signal']))
+    objective_with_data = partial(objective_two, x_data=X_list, y_data=Y_list)
+    study = optuna.create_study(direction="minimize", sampler=TPESampler())
+    study.optimize(objective_with_data, n_trials=50, callbacks=[check_stop])
 
-    plt.figure(figsize=(8, 5))
-    plt.scatter(X_list, Y_list, label='Исходные данные')
-    plt.scatter(
-        X_list,
-        simple_tsallis_(
-                    X_list, q2opt, G2opt,
-                    Bres2opt, Ampl2opt, 0),
-        label=''
-    )
-    plt.text(3200, -80, f"Параметры подгонки:\nq2={q2opt}\nG2opt={G2opt}"
-             f"\nB2={Bres2opt}\nAmpl2opt={Ampl2opt}")
+    # objective_with_data = partial(objective, x_data=X_list, y_data=Y_list)
+    # study = optuna.create_study(direction="minimize")
+    # study.optimize(objective_with_data, n_trials=5000, callbacks=[check_stop])
 
-    plt.figure(figsize=(8, 5))
-    plt.scatter(X_list, Y_list, label='Исходные данные')
-    plt.scatter(
-        X_list,
-        simple_tsallis_(
-                    X_list, q1opt, G1opt,
-                    Bres1opt, Ampl1opt, 0),
-        label=''
-    )
-    plt.text(3200, -80, f"Параметры подгонки:\nq1={q1opt}\nG1opt={G1opt}"
-             f"\nB1={Bres1opt}\nAmpl1opt={Ampl1opt}")
+    # plt.figure(figsize=(8, 5))
+    # plt.scatter(X_list, Y_list, label='Исходные данные')
+    # plt.scatter(
+    #     X_list,
+    #     simple_tsallis_(
+    #                 X_list, q2opt, G2opt,
+    #                 Bres2opt, Ampl2opt, 0),
+    #     label=''
+    # )
+    # plt.text(3200, -80, f"Параметры подгонки:\nq2={q2opt}\nG2opt={G2opt}"
+    #          f"\nB2={Bres2opt}\nAmpl2opt={Ampl2opt}")
 
-    plt.figure(figsize=(8, 5))
-    plt.scatter(X_list, Y_list, label='Исходные данные')
-    plt.scatter(
-        X_list,
-        simple_tsallis_(
-                    X_list, q1opt, G1opt,
-                    Bres1opt, Ampl1opt, 0) +
-        simple_tsallis_(
-                    X_list, q2opt, G2opt,
-                    Bres1opt, Ampl2opt, 0) + copt,
-        label=''
-    )
+    # plt.figure(figsize=(8, 5))
+    # plt.scatter(X_list, Y_list, label='Исходные данные')
+    # plt.scatter(
+    #     X_list,
+    #     simple_tsallis_(
+    #                 X_list, q1opt, G1opt,
+    #                 Bres1opt, Ampl1opt, 0),
+    #     label=''
+    # )
+    # plt.text(3200, -80, f"Параметры подгонки:\nq1={q1opt}\nG1opt={G1opt}"
+    #          f"\nB1={Bres1opt}\nAmpl1opt={Ampl1opt}")
+
+    # plt.figure(figsize=(8, 5))
+    # plt.scatter(X_list, Y_list, label='Исходные данные')
+    # plt.scatter(
+    #     X_list,
+    #     simple_tsallis_(
+    #                 X_list, q1opt, G1opt,
+    #                 Bres1opt, Ampl1opt, 0) +
+    #     simple_tsallis_(
+    #                 X_list, q2opt, G2opt,
+    #                 Bres1opt, Ampl2opt, 0) + copt,
+    #     label=''
+    # )
     # print("Лучшие параметры:", study.best_params)
 
     # G_0 = 2

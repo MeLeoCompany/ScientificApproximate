@@ -31,7 +31,7 @@ def simple_tsallis_torch(x, q, G, H_0, Yt, dY):
     if not (torch.tensor(1.0) <= q <= torch.tensor(3.0)) or \
        not (torch.tensor(0) <= G <= torch.tensor(4.0)) or \
        not (torch.tensor(3245) <= H_0 <= torch.tensor(3260)) or \
-       not (torch.tensor(20) <= Yt <= torch.tensor(300)):
+       not (torch.tensor(0) <= Yt <= torch.tensor(1)):
         return torch.tensor([float('inf')])
     a1 = torch.pow(2.0, q - 1.0) - 1.0
     a2 = -1.0 / (q - 1.0)
