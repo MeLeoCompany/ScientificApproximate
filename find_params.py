@@ -160,7 +160,7 @@ def objective(trial, x_data, y_data):
 
 
 def check_stop(study, trial):
-    if study.best_value < 3.5e-5:
+    if study.best_value < 2.5e-5:
         study.stop()
 
 
@@ -198,7 +198,7 @@ def find_two_tsall_param(
     Y_list = experimental_spectr['Signal']/(max(experimental_spectr['Signal']) - min(experimental_spectr['Signal']))
     objective_with_data = partial(objective_two, x_data=X_list, y_data=Y_list)
     study = optuna.create_study(direction="minimize", sampler=TPESampler())
-    study.optimize(objective_with_data, n_trials=50, callbacks=[check_stop])
+    study.optimize(objective_with_data, n_trials=100, callbacks=[check_stop])
 
     # objective_with_data = partial(objective, x_data=X_list, y_data=Y_list)
     # study = optuna.create_study(direction="minimize")
@@ -275,4 +275,5 @@ def find_two_tsall_param(
     # plt.scatter(X_list, Y_list, label='Исходные данные')
     # plt.scatter(X_list, simple_tsallis_(X_list, res.x[1], res.x[0], res.x[2], res.x[3], 0) +
     #             simple_tsallis_(X_list, res.x[5], res.x[4], res.x[6], res.x[7], 0) + res.x[8], label='')
+    # study.best_trial.user_attrs['res']
     return None

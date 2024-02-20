@@ -1,6 +1,8 @@
 from functools import partial
 import multiprocessing
+import os
 import pickle
+import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,6 +16,7 @@ from ellips_param import find_ellips_param
 from etl import read_points_from_file, lists_to_excel
 from find_params import find_param, find_two_tsall_param
 from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
+from tsallis_fix_b import find_params_two_tsallis_fixB
 
 
 def find_dependece(q0):
@@ -38,11 +41,47 @@ def find_dependece(q0):
 
     if TWO_TSALLIAN_MANUAL_MODE:
         experimental_spectr = pd.read_csv(
-            'series-3250-100-pw=10-rg=5-ma=0,1.dat', sep='\t',
+            'series-3250-100-pw=1-rg=1,25-ma=4.dat', sep='\t',
             names=['B', 'Signal'])
         find_two_tsall_param(
             experimental_spectr,
         )
+        table_parametr = pd.DataFrame(
+            columns=['hm', 'G0', 'q0', 'B0', 'ampl0', 'G0_1', 'q0_1', 'B0_1', 'ampl0_1', 'c', 'funmin']
+        )
+        B_0 = 3255.536860862727
+        B_1 = 3257.9813044900907
+        folder_path = "./Q55"
+        file_names = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        file_names.remove('series-3250-100-pw=10-rg=5-ma=0,1.dat')
+        pattern = r'ma=([\d,]+)'
+        for file in file_names:
+            ma_str = re.search(pattern, file).group(1)
+            ma = float(ma_str.replace(",", "."))
+            file_path = os.path.join(folder_path, file)
+            with open(file_path, 'r') as file:
+                for i, line in enumerate(file):
+                    if 'x-coordinate\tAmplitude' in line:
+                        header_line = i
+                        break
+            experimental_spectr = pd.read_csv(
+                file_path, skiprows=header_line+1,
+                delimiter='\t', names=['B', 'Signal']
+            )
+            X_list = experimental_spectr['B']
+            Y_list = experimental_spectr['Signal']/(
+                max(experimental_spectr['Signal']) - min(experimental_spectr['Signal'])
+            )
+            res = find_params_two_tsallis_fixB(
+                X_list, Y_list, B_0, B_1
+            )
+            new_row = pd.Series(
+                [ma, res.x[0], res.x[1], B_0, res.x[2],  res.x[3], res.x[4], B_1, res.x[5], res.x[6], res.fun],
+                index=table_parametr.columns
+            )
+            table_parametr = table_parametr._append(new_row, ignore_index=True)
+
+        table_parametr.sort_values(by='hm')
 
     table_result = pd.DataFrame(columns=columns)
     tsal_intersection_result = pd.DataFrame(columns=['q0', 'hm', 'hm/G*'])
