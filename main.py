@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
     INITAL_AMPL_TSAL, INITAL_G_PIRS, INITAL_G_TSAL, INITAL_M_PIRS, \
-    INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE, TWO_TSALLIAN_MANUAL_MODE
+    INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE, TWO_TSALLIAN_MANUAL_FUNMIN_CHECK, TWO_TSALLIAN_MANUAL_MODE
 
 from derivative import derivatives_find
 from ellips_param import find_ellips_param
@@ -39,9 +39,70 @@ def find_dependece(q0):
         columns_tsal = "ampl_1, qt_1, Gt_1, Bres_1, msn_1, ampl_2, qt_2, Gt_2, Bres_2, msn_2, "
         columns += columns_tsal
 
+    if TWO_TSALLIAN_MANUAL_FUNMIN_CHECK:
+
+        table_parametrs = pd.DataFrame(
+            columns=['hm', 'funmin']
+        )
+
+        folder_path = "./Q55"
+        file_names = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        file_names.remove('series-3250-100-pw=10-rg=5-ma=0,1.dat')
+        pattern = r'ma=([\d,]+)'
+        for file in file_names:
+            ma_str = re.search(pattern, file).group(1)
+            ma = float(ma_str.replace(",", "."))
+            file_path = os.path.join(folder_path, file)
+            with open(file_path, 'r') as file:
+                for i, line in enumerate(file):
+                    if 'x-coordinate\tAmplitude' in line:
+                        header_line = i
+                        break
+            experimental_spectr = pd.read_csv(
+                file_path, skiprows=header_line+1,
+                delimiter='\t', names=['B', 'Signal']
+            )
+            X_list = experimental_spectr['B']
+            Y_list = experimental_spectr['Signal']/(
+                max(experimental_spectr['Signal']) - min(experimental_spectr['Signal'])
+            )
+
+            Ampl0_1 = 1.0087859013402007
+            Ampl0_2 = 0.18161408924683042
+            C = -0.0036201733674702296
+
+            params_1 = {
+                "q0": 1.5232059438020693,
+                "G0": 2.6044979730736957,
+                "B0": 3255.419345520497,
+                "H_array": X_list,
+                "hm": ma,
+            }
+
+            params_2 = {
+                "q0": 1.98927927011648,
+                "G0": 1.9904610760699508,
+                "B0": 3257.7496011670673,
+                "H_array": X_list,
+                "hm": ma,
+            }
+            Y1 = Tsallian().tsall_init_new(*list(params_1.values()))
+            Y2 = Tsallian().tsall_init_new(*list(params_2.values()))
+            Y_sum = Y1*Ampl0_1 + Y2*Ampl0_2 + C
+            funmin = np.sum((Y_sum-Y_list)**2)/len(Y_sum)
+
+            new_row = pd.Series(
+                [ma, funmin],
+                index=table_parametrs.columns
+            )
+
+            table_parametrs = table_parametrs._append(new_row, ignore_index=True)
+
+        table_parametrs.sort_values(by='hm')
+
     if TWO_TSALLIAN_MANUAL_MODE:
         experimental_spectr = pd.read_csv(
-            'series-3250-100-pw=1-rg=1,25-ma=4.dat', sep='\t',
+            'series-3250-100-pw=10-rg=5-ma=0,1.dat', sep='\t',
             names=['B', 'Signal'])
         find_two_tsall_param(
             experimental_spectr,

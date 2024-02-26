@@ -17,7 +17,9 @@ INITAL_Q_TSAL = 2.0
 INITAL_G_TSAL = 1.0
 BOUNDS_TSAL = ([0.5, 0.5, 0.08], [10, 3.0, 100])
 
-TWO_TSALLIAN_MANUAL_MODE = True
+TWO_TSALLIAN_MANUAL_MODE = False
+
+TWO_TSALLIAN_MANUAL_FUNMIN_CHECK = True
 
 
 # Глубина рекурсии для уточняющего поиска dHpp и App

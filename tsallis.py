@@ -53,9 +53,9 @@ def pirsonian(x, amplt, M, G):
 def ellips(x, p2, p3, p4):
     return 0+p2*(1-((x-p4)**2)/p3)**0.5
 
+
 @dataclass
 class Tsallian:
-    
     N: int = None
     q: float = None
     G: float = None
@@ -94,6 +94,32 @@ class Tsallian:
             pass
         return tsallian
 
+    @classmethod
+    def tsall_init_new(
+        cls,
+        q: float,
+        G: float,
+        H_0: float,
+        H_array: np.ndarray,
+        hm: float = None,
+    ) -> 'Tsallian':
+        tmp_1 = pow(2.0, q - 1.0) - 1.0
+        beta = sp.beta(0.5, 1.0 / (q - 1.0) - 0.5)
+        f_max = np.sqrt(tmp_1) / (G * beta)
+        Hd_list = H_array - H_0
+        Y = np.zeros(len(Hd_list))
+
+        i = 0
+        for Hd in Hd_list:
+            integrand = partial(cls.integral_new, tmp1=tmp_1, Hd=Hd, hm=hm, G=G, q=q)
+            result, _ = quad(integrand, -np.pi, np.pi)
+            Y[i] = result * f_max
+            i += 1
+
+        App = np.max(Y) - np.min(Y)
+        Y_norm = Y / App
+        return Y_norm
+
     def distortion_spectr(self):
         Hd = -(self.H_0 - self.H_left)
         tmp_1 = pow(2.0, self.q - 1.0) - 1.0
@@ -121,14 +147,13 @@ class Tsallian:
             integrand = partial(self.integral, tmp1=tmp_1, Hd=Hd)
             result, _ = quad(integrand, -np.pi, np.pi)
             self.Y[i] = result * f_max
-            i +=1
+            i += 1
 
         self.App = np.max(self.Y) - np.min(self.Y)
         self.dHpp = self.Hd[np.argmin(self.Y)] - self.Hd[np.argmax(self.Y)]
         self.Y_norm = self.Y / self.App
         self.B = self.Hd + self.H_0
         return self
-
 
     def find_sperctr(
         self: 'Tsallian',
@@ -143,9 +168,8 @@ class Tsallian:
             integrand = partial(self.integral, tmp1=tmp_1, Hd=Hd)
             result, _ = quad(integrand, -np.pi, np.pi)
             Y[i] = result * f_max
-            i +=1
+            i += 1
         return Y, Hd_list[np.argmax(Y)], Hd_list[np.argmin(Y)]
-
 
     def find_spectr_param_recursion(
         self: 'Tsallian',
@@ -166,7 +190,6 @@ class Tsallian:
         Hd_list = np.hstack((Hd_list_left_peak, Hd_list_right_peak))
         recursion_depth_const -= 1
         self.find_spectr_param_recursion(N, Hd_list, f_max, tmp_1, recursion_depth_const)
-        
 
     def integral(
         self: 'Tsallian',
@@ -176,4 +199,17 @@ class Tsallian:
     ):
         tmp2 = (Hd + 0.5 * self.hm * np.sin(x)) / self.G
         res = np.sin(x) * pow(1.0 + tmp1 * tmp2 * tmp2, -1.0 / (self.q - 1.0))
+        return res
+
+    @staticmethod
+    def integral_new(
+        x: float,
+        tmp1: float,
+        Hd: float,
+        hm: float,
+        G: float,
+        q: float
+    ):
+        tmp2 = (Hd + 0.5 * hm * np.sin(x)) / G
+        res = np.sin(x) * pow(1.0 + tmp1 * tmp2 * tmp2, -1.0 / (q - 1.0))
         return res
