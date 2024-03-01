@@ -9,12 +9,13 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
     INITAL_AMPL_TSAL, INITAL_G_PIRS, INITAL_G_TSAL, INITAL_M_PIRS, \
-    INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE, TWO_TSALLIAN_MANUAL_FUNMIN_CHECK, TWO_TSALLIAN_MANUAL_MODE
+    INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE, \
+    TSALLIAN_MODE_DAT, TWO_TSALLIAN_MANUAL_FUNMIN_CHECK, TWO_TSALLIAN_MANUAL_MODE
 
 from derivative import derivatives_find
 from ellips_param import find_ellips_param
 from etl import read_points_from_file, lists_to_excel
-from find_params import find_param, find_two_tsall_param
+from find_params import find_one_tsall_param, find_param, find_two_tsall_param
 from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
 from tsallis_fix_b import find_params_two_tsallis_fixB
 
@@ -38,6 +39,77 @@ def find_dependece(q0):
     if TWO_TSALLIAN_MANUAL_MODE:
         columns_tsal = "ampl_1, qt_1, Gt_1, Bres_1, msn_1, ampl_2, qt_2, Gt_2, Bres_2, msn_2, "
         columns += columns_tsal
+
+    if TSALLIAN_MODE_DAT:
+        # experimental_spectr = pd.read_csv(
+        #     './bdpa/BDPA-3253-20-pw=1-rg=5-ma=0,1.dat', sep='\t',
+        #     names=['B', 'Signal'])
+        # find_one_tsall_param(
+        #     experimental_spectr,
+        # )
+        table_parametrs = pd.DataFrame(
+            columns=['hm', 'funmin']
+        )
+        folder_path = "./bdpa"
+        file_names = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        pattern = r'ma=([\d,]+)'
+        file_names.remove('BDPA-3253-20-pw=1-rg=50-ma=0,05.dat')
+        file_names.remove('BDPA-3253-20-pw=1-rg=5-ma=0,1.dat')
+        for file in file_names:
+            ma_str = re.search(pattern, file).group(1)
+            ma = float(ma_str.replace(",", "."))
+            file_path = os.path.join(folder_path, file)
+            with open(file_path, 'r') as file:
+                for i, line in enumerate(file):
+                    if 'x-coordinate\tAmplitude' in line:
+                        header_line = i
+                        break
+            experimental_spectr = pd.read_csv(
+                file_path, skiprows=header_line+1,
+                delimiter='\t', names=['B', 'Signal']
+            )
+            X_list = experimental_spectr['B']
+            Y_list = experimental_spectr['Signal']/(
+                max(experimental_spectr['Signal']) - min(experimental_spectr['Signal'])
+            )
+
+            # ma = ma/1.5
+            # Ampl0_1 = 0.9997809556326396
+            # C = 0.0009108415494761934
+
+            # params_1 = {
+            #     "q0": 2.1191387055143847,
+            #     "G0": 0.5540674486297806,
+            #     "B0": 3252.932789971564,
+            #     "H_array": X_list,
+            #     "hm": ma,
+            # }
+            # funmin = 4.2829304406946225e-06
+
+            ma = ma/1.5
+            Ampl0_1 = 0.990691551703254
+            C = 0.00019618396712957776
+
+            params_1 = {
+                "q0": 2.131899242280023,
+                "G0": 0.5620619750350033,
+                "B0": 3252.91258671749,
+                "H_array": X_list,
+                "hm": ma,
+            }
+            # funmin = 1.0081684997897367e-05
+            Y1 = Tsallian().tsall_init_new(*list(params_1.values()))
+            Y_sum = Y1*Ampl0_1 + C
+            funmin = np.sum((Y_sum-Y_list)**2)/len(Y_sum)
+
+            new_row = pd.Series(
+                [ma, funmin],
+                index=table_parametrs.columns
+            )
+
+            table_parametrs = table_parametrs._append(new_row, ignore_index=True)
+
+        table_parametrs.sort_values(by='hm')
 
     if TWO_TSALLIAN_MANUAL_FUNMIN_CHECK:
 
@@ -67,6 +139,7 @@ def find_dependece(q0):
                 max(experimental_spectr['Signal']) - min(experimental_spectr['Signal'])
             )
 
+            ma = ma/1.5
             Ampl0_1 = 1.0087859013402007
             Ampl0_2 = 0.18161408924683042
             C = -0.0036201733674702296

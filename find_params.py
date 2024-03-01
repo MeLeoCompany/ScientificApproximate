@@ -59,12 +59,58 @@ def quadratic_error(variables, *args):
     return np.sum((y - y_pred) ** 2)/np.size(y_pred)
 
 
+def quadratic_error_c(variables, *args):
+    G1, q1, Bres1, Ampl1, c = variables
+    x = args[0]
+    y = args[1]
+    y_pred = simple_tsallis_(x, q1, G1, Bres1, Ampl1, c)
+    return np.sum((y - y_pred) ** 2)/np.size(y_pred)
+
+
 def quadratic_error_two(variables, *args):
     G1, q1, Bres1, Ampl1, G2, q2, Bres2, Ampl2, c = variables
     x = args[0]
     y = args[1]
     y_pred = simple_tsallis_(x, q1, G1, Bres1, Ampl1, 0) + simple_tsallis_(x, q2, G2, Bres2, Ampl2, 0) + c
     return np.sum((y - y_pred) ** 2)/np.size(y_pred)
+
+
+def objective_one(trial, x_data, y_data):
+    B_0 = trial.suggest_float("B1", 3252, 3254)
+    G_0 = 1
+    q_0 = 2
+    Ampl_0 = 0.7
+    dG = 0.5
+    dq = 0.99999
+    dB = 0.5
+    dAmp = 0.49999
+    c = 0
+    dc = 0.2
+
+    initial_guess = [G_0, q_0, B_0, Ampl_0, c]
+    bounds = [
+        (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+        (B_0-dB, B_0+dB), (Ampl_0-dAmp, Ampl_0+dAmp),
+        (c-dc, c+dc)
+    ]
+
+    res = minimize(
+        quadratic_error_c,
+        initial_guess,
+        args=(x_data, y_data),
+        bounds=bounds,
+        method='L-BFGS-B',
+        options={
+            'maxfun': 500000,
+            'maxiter': 50000000,
+            'ftol': 1e-6
+        }
+    )
+
+    if len(trial.study.best_trials):
+        if res.fun < trial.study.best_value:
+            trial.set_user_attr("res", res)
+    return res.fun
 
 
 def objective_two(trial, x_data, y_data):
@@ -160,7 +206,7 @@ def objective(trial, x_data, y_data):
 
 
 def check_stop(study, trial):
-    if study.best_value < 2.5e-5:
+    if study.best_value < 2.5e-6:
         study.stop()
 
 
@@ -189,6 +235,17 @@ def find_loss(x_data, y_data, predefined_values):
         optimizer.step()
 
     return opt
+
+
+def find_one_tsall_param(
+    experimental_spectr
+):
+    X_list = experimental_spectr['B']
+    Y_list = experimental_spectr['Signal']/(max(experimental_spectr['Signal']) - min(experimental_spectr['Signal']))
+    objective_with_data = partial(objective_one, x_data=X_list, y_data=Y_list)
+    study = optuna.create_study(direction="minimize", sampler=TPESampler())
+    study.optimize(objective_with_data, n_trials=35, callbacks=[check_stop])
+    return None
 
 
 def find_two_tsall_param(

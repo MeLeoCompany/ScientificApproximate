@@ -19,7 +19,9 @@ BOUNDS_TSAL = ([0.5, 0.5, 0.08], [10, 3.0, 100])
 
 TWO_TSALLIAN_MANUAL_MODE = False
 
-TWO_TSALLIAN_MANUAL_FUNMIN_CHECK = True
+TWO_TSALLIAN_MANUAL_FUNMIN_CHECK = False
+
+TSALLIAN_MODE_DAT = True
 
 
 # Глубина рекурсии для уточняющего поиска dHpp и App
