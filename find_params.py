@@ -7,7 +7,7 @@ from scipy.optimize import curve_fit
 from scipy.optimize import minimize
 import torch
 from optuna.samplers import RandomSampler, CmaEsSampler, TPESampler
-from tsallis import pirsonian, simple_tsallis_, simple_tsallis_torch
+from tsallis import Tsallian, pirsonian, simple_tsallis_, simple_tsallis_torch
 
 
 def find_param(
@@ -65,6 +65,27 @@ def quadratic_error_c(variables, *args):
     y = args[1]
     y_pred = simple_tsallis_(x, q1, G1, Bres1, Ampl1, c)
     return np.sum((y - y_pred) ** 2)/np.size(y_pred)
+
+
+def quadratic_error_b(variables, *args):
+    Bres1 = variables
+    X_list = args[0]
+    Y_list = args[1]
+    ma = args[2]
+    Ampl0_1 = 0.990691551703254
+    C = 0.00019618396712957776
+
+    params_1 = {
+        "q0": 2.131899242280023,
+        "G0": 0.5620619750350033,
+        "B0": Bres1,
+        "H_array": X_list,
+        "hm": ma,
+    }
+    Y1 = Tsallian().tsall_init_new(*list(params_1.values()))
+    Y_sum = Y1*Ampl0_1 + C
+    funmin = np.sum((Y_sum-Y_list)**2)/len(Y_sum)
+    return funmin
 
 
 def quadratic_error_two(variables, *args):
@@ -173,6 +194,33 @@ def objective_two(trial, x_data, y_data):
             'ftol': 1e-6
         }
     )
+    if len(trial.study.best_trials):
+        if res.fun < trial.study.best_value:
+            trial.set_user_attr("res", res)
+    return res.fun
+
+
+def objective_one_b(trial, x_data, y_data, ma):
+    dB = 0.5
+    B_0 = trial.suggest_float("B1", 3252.91258671749-dB, 3252.91258671749+dB)
+    initial_guess = [B_0]
+    bounds = [
+        (B_0-dB, B_0+dB)
+    ]
+
+    res = minimize(
+        quadratic_error_b,
+        initial_guess,
+        args=(x_data, y_data, ma),
+        bounds=bounds,
+        method='L-BFGS-B',
+        options={
+            'maxfun': 500000,
+            'maxiter': 50000000,
+            'ftol': 1e-6
+        }
+    )
+
     if len(trial.study.best_trials):
         if res.fun < trial.study.best_value:
             trial.set_user_attr("res", res)
@@ -334,3 +382,15 @@ def find_two_tsall_param(
     #             simple_tsallis_(X_list, res.x[5], res.x[4], res.x[6], res.x[7], 0) + res.x[8], label='')
     # study.best_trial.user_attrs['res']
     return None
+
+
+def find_one_tsall_param_b(
+    X_list,
+    Y_list,
+    ma
+):
+    objective_with_data = partial(objective_one_b, x_data=X_list, y_data=Y_list, ma=ma)
+    study = optuna.create_study(direction="minimize", sampler=TPESampler())
+    study.optimize(objective_with_data, n_trials=3, callbacks=[check_stop])
+    res = study.best_value
+    return res

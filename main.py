@@ -15,7 +15,7 @@ from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
 from derivative import derivatives_find
 from ellips_param import find_ellips_param
 from etl import read_points_from_file, lists_to_excel
-from find_params import find_one_tsall_param, find_param, find_two_tsall_param
+from find_params import find_one_tsall_param, find_one_tsall_param_b, find_param, find_two_tsall_param
 from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
 from tsallis_fix_b import find_params_two_tsallis_fixB
 
@@ -86,24 +86,9 @@ def find_dependece(q0):
             # }
             # funmin = 4.2829304406946225e-06
 
-            ma = ma/1.5
-            Ampl0_1 = 0.990691551703254
-            C = 0.00019618396712957776
-
-            params_1 = {
-                "q0": 2.131899242280023,
-                "G0": 0.5620619750350033,
-                "B0": 3252.91258671749,
-                "H_array": X_list,
-                "hm": ma,
-            }
-            # funmin = 1.0081684997897367e-05
-            Y1 = Tsallian().tsall_init_new(*list(params_1.values()))
-            Y_sum = Y1*Ampl0_1 + C
-            funmin = np.sum((Y_sum-Y_list)**2)/len(Y_sum)
-
+            funmin = find_one_tsall_param_b(X_list=X_list, Y_list=Y_list, ma=ma/1.5)
             new_row = pd.Series(
-                [ma, funmin],
+                [ma/1.5, funmin],
                 index=table_parametrs.columns
             )
 
