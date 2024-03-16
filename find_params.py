@@ -67,6 +67,10 @@ def quadratic_error_c(variables, *args):
     return np.sum((y - y_pred) ** 2)/np.size(y_pred)
 
 
+dBpp_theor = 0
+dBpp_exper = 0
+
+
 def quadratic_error_b(variables, *args):
     Bres1 = variables
     X_list = args[0]
@@ -84,6 +88,9 @@ def quadratic_error_b(variables, *args):
     }
     Y1 = Tsallian().tsall_init_new(*list(params_1.values()))
     Y_sum = Y1*Ampl0_1 + C
+    global dBpp_theor, dBpp_exper
+    dBpp_theor = X_list[np.argmin(Y1)] - X_list[np.argmax(Y1)]
+    dBpp_exper = X_list[np.argmin(Y_list)] - X_list[np.argmax(Y_list)]
     funmin = np.sum((Y_sum-Y_list)**2)/len(Y_sum)
     return funmin
 
@@ -97,11 +104,11 @@ def quadratic_error_two(variables, *args):
 
 
 def objective_one(trial, x_data, y_data):
-    B_0 = trial.suggest_float("B1", 3252, 3254)
-    G_0 = 1
+    B_0 = trial.suggest_float("B1", 3254, 3256)
+    G_0 = 2
     q_0 = 2
     Ampl_0 = 0.7
-    dG = 0.5
+    dG = 1
     dq = 0.99999
     dB = 0.5
     dAmp = 0.49999
@@ -292,7 +299,7 @@ def find_one_tsall_param(
     Y_list = experimental_spectr['Signal']/(max(experimental_spectr['Signal']) - min(experimental_spectr['Signal']))
     objective_with_data = partial(objective_one, x_data=X_list, y_data=Y_list)
     study = optuna.create_study(direction="minimize", sampler=TPESampler())
-    study.optimize(objective_with_data, n_trials=35, callbacks=[check_stop])
+    study.optimize(objective_with_data, n_trials=100, callbacks=[check_stop])
     return None
 
 

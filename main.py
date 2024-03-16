@@ -6,11 +6,12 @@ import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from scipy.optimize import curve_fit
 from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
     INITAL_AMPL_TSAL, INITAL_G_PIRS, INITAL_G_TSAL, INITAL_M_PIRS, \
     INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE, \
-    TSALLIAN_MODE_DAT, TWO_TSALLIAN_MANUAL_FUNMIN_CHECK, TWO_TSALLIAN_MANUAL_MODE
+    TSALLIAN_MODE_DAT, TSALLIAN_MODE_DAT_0, TWO_TSALLIAN_MANUAL_FUNMIN_CHECK, TWO_TSALLIAN_MANUAL_MODE
 
 from derivative import derivatives_find
 from ellips_param import find_ellips_param
@@ -39,6 +40,69 @@ def find_dependece(q0):
     if TWO_TSALLIAN_MANUAL_MODE:
         columns_tsal = "ampl_1, qt_1, Gt_1, Bres_1, msn_1, ampl_2, qt_2, Gt_2, Bres_2, msn_2, "
         columns += columns_tsal
+
+    if TSALLIAN_MODE_DAT_0:
+        experimental_spectr = pd.read_csv(
+            './Q55/series-3250-100-pw=10-rg=5-ma=0,1.dat', sep='\t',
+            names=['B', 'Signal'])
+        # find_one_tsall_param(
+        #     experimental_spectr,
+        # )
+        X_list = experimental_spectr['B']
+        Y_list = experimental_spectr['Signal']/(max(experimental_spectr['Signal']) - min(experimental_spectr['Signal']))
+        table_parametrs_theor = pd.DataFrame(
+            columns=['1/dBpp', 'hm/dBpp']
+        )
+        hm_list = np.hstack((np.arange(0.1, 20, 0.1)))
+        for hm in hm_list:
+            Ampl0_1 = 1.004156726980229
+            C = -0.0037860981300509382
+            # fun = 7.412522656987999e-05
+            params_1 = {
+                "q0": 1.3723009686831218,
+                "G0": 2.765224537796648,
+                "B0": 3255.612860909986,
+                "H_array": X_list,
+                "hm": hm,
+            }
+            Y1 = Tsallian().tsall_init_new(*list(params_1.values()))
+            dBpp_theor = X_list[np.argmin(Y1)] - X_list[np.argmax(Y1)]
+            new_row = pd.Series(
+                [1/dBpp_theor, hm/dBpp_theor],
+                index=table_parametrs_theor.columns
+            )
+            table_parametrs_theor = table_parametrs_theor._append(new_row, ignore_index=True)
+
+        table_parametrs_exper = pd.DataFrame(
+            columns=['1/dBpp', 'hm/dBpp']
+        )
+        folder_path = "./Q55"
+        file_names = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        pattern = r'ma=([\d,]+)'
+        for file in file_names:
+            ma_str = re.search(pattern, file).group(1)
+            ma = float(ma_str.replace(",", "."))/1.5
+            file_path = os.path.join(folder_path, file)
+            with open(file_path, 'r') as files:
+                for i, line in enumerate(files):
+                    if 'x-coordinate\tAmplitude' in line:
+                        header_line = i
+                        break
+            experimental_spectr = pd.read_csv(
+                file_path, skiprows=header_line+1,
+                delimiter='\t', names=['B', 'Signal']
+            )
+            X_list = experimental_spectr['B']
+            Y_list = experimental_spectr['Signal']/(
+                max(experimental_spectr['Signal']) - min(experimental_spectr['Signal'])
+            )
+            dBpp_exper = X_list[np.argmin(Y_list)] - X_list[np.argmax(Y_list)]
+            new_row = pd.Series(
+                [1/dBpp_exper, ma/dBpp_exper],
+                index=table_parametrs_exper.columns
+            )
+            table_parametrs_exper = table_parametrs_exper._append(new_row, ignore_index=True)
+        table_parametrs_exper.sort_values(by='hm')
 
     if TSALLIAN_MODE_DAT:
         # experimental_spectr = pd.read_csv(
@@ -153,6 +217,33 @@ def find_dependece(q0):
                 [ma, funmin],
                 index=table_parametrs.columns
             )
+
+            # Подготовка данных
+            # Предполагаем, что у вас есть данные экспериментальные и теоретические
+            # Здесь пример с сгенерированными данными
+
+            data_exp = pd.DataFrame({'X_list':  X_list, 'Y_list': Y_list})
+            data_theory = pd.DataFrame({'X_list':  X_list, 'Y_list': Y_sum})
+
+            # Настройка стиля
+            sns.set(style="whitegrid")
+
+            # Создание графика
+            plt.figure(figsize=(10, 6))
+            sns.scatterplot(data=data_theory, x='X_list', y='Y_list', color='red', marker='o', s=10, label='Теоретические данные')
+            sns.scatterplot(data=data_exp, x='X_list', y='Y_list', color='black', marker='s', facecolors='none', s=10, edgecolor='black', linewidth=2, label='Экспериментальные данные')
+            plt.text(0.95, 0.75, f'ma = {ma}\nfunmin = {funmin}', fontsize=20, ha='right', va='bottom', transform=plt.gca().transAxes)
+
+            # Настройка осей
+            plt.xlabel('$X_list$', fontsize=14)
+            plt.ylabel('$X_list$', fontsize=14)
+
+            # Добавление легенды и заголовка
+            plt.legend()
+            plt.title('Сравнение экспериментальных и теоретических данных', fontsize=16)
+
+            # Показать график
+            plt.savefig(f'./Q55/graphs/ma={ma}.png')
 
             table_parametrs = table_parametrs._append(new_row, ignore_index=True)
 
@@ -399,3 +490,35 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import pandas as pd
+# import numpy as np
+
+# # Подготовка данных
+# # Предполагаем, что у вас есть данные экспериментальные и теоретические
+# # Здесь пример с сгенерированными данными
+
+# data_exp = pd.DataFrame({'hm/dBpp':  table_parametrs_exper['hm/dBpp']*1.5, '1/dBpp': table_parametrs_exper['1/dBpp']})
+# data_theory = pd.DataFrame({'hm/dBpp': table_parametrs_theor['hm/dBpp'], '1/dBpp':  table_parametrs_theor['1/dBpp']})
+
+# # Настройка стиля
+# sns.set(style="whitegrid")
+
+# # Создание графика
+# plt.figure(figsize=(10, 6))
+# sns.scatterplot(data=data_theory, x='hm/dBpp', y='1/dBpp', color='red', marker='o', s=100, label='Теоретические данные')
+# sns.scatterplot(data=data_exp, x='hm/dBpp', y='1/dBpp', color='black', marker='s', facecolors='none', s=100, edgecolor='black', linewidth=2, label='Экспериментальные данные')
+# plt.text(0.95, 0.75, f'q = 1.37\nG = 2.76', fontsize=20, ha='right', va='bottom', transform=plt.gca().transAxes)
+
+# # Настройка осей
+# plt.xlabel('$hm/dBpp$', fontsize=14)
+# plt.ylabel('$1/dBpp$', fontsize=14)
+
+# # Добавление легенды и заголовка
+# plt.legend()
+# plt.title('Сравнение экспериментальных и теоретических данных', fontsize=16)
+
+# # Показать график
+# plt.show()
