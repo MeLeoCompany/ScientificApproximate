@@ -410,31 +410,92 @@ def find_dependece(q0):
         iteration += 1
 
 
+def sumple_dependences(q):
+    hm_list = np.hstack((np.arange(0.1, 5, 0.2)))
+    table_parametr = pd.DataFrame(
+                columns=["1/dBpp", "hm/dBpp"]
+            )
+    for hm in hm_list:
+        params = {
+            "Number of points": 10000,
+            "q": q,
+            "G": 1.0,
+            "H_0": 3250.0,
+            "H_left": 3230.0,
+            "hm": hm,
+            "distortion": True
+        }
+        # Получаем объект тцаллиана фабрикой
+        tsal = Tsallian().tsall_init(*list(params.values()))
+        new_row = pd.Series(
+            [1/tsal.dHpp, hm/tsal.dHpp],
+            index=table_parametr.columns
+        )
+        table_parametr = table_parametr._append(new_row, ignore_index=True)
+        print(f"hm={hm}, q={q}")
+
+    return {"q": q, "res": table_parametr}
+# # Настройка стиля
+# sns.set(style="whitegrid")
+
+# # Создание графика
+# plt.figure(figsize=(10, 6))
+# for res in results:
+#     q = res['q']
+#     plt.plot(res['res']['hm/dBpp'], res['res']['1/dBpp'], '-o', label=f'q = {q:.2f}')
+# plt.xlabel('hm/dBpp')
+# plt.ylabel('1/dBpp', labelpad=20)
+
+# # Настройка осей
+# plt.xlabel(r'$\frac{hm}{dBpp}$', fontsize=14)
+# plt.ylabel(r'$\frac{1}{dBpp}$',  rotation=0, fontsize=14)
+
+# # Добавление легенды и заголовка
+# plt.legend()
+# plt.title(r'Зависимость $\frac{1}{dBpp}$ от $\frac{hm}{dBpp}$ для разных q', fontsize=15, pad=20)
+
+# # Показать график
+# plt.savefig(f'grapghfdhgf')
+
+
 def main():
 
-    find_dependece(2.0)
+    # find_dependece(2.0)
 
-    pool_size = 10
+    # pool_size = 10
 
-    # Создаем пул процессов
-    with multiprocessing.Pool(pool_size) as pool:
-        # Список задач (например, числа от 0 до 19)
-        tasks = tuple(np.arange(1.05, 3, 0.05))
+    # # Создаем пул процессов
+    # with multiprocessing.Pool(pool_size) as pool:
+    #     # Список задач (например, числа от 0 до 19)
+    #     tasks = tuple(np.arange(1.05, 3, 0.05))
 
-        # Распределение задач между процессами и сбор результатов
-        results = pool.map(find_dependece, tasks)
+    #     # Распределение задач между процессами и сбор результатов
+    #     results = pool.map(find_dependece, tasks)
 
-        # Вывод результатов
-        print(results)
+    #     # Вывод результатов
+    #     print(results)
 
-    with open('results_ellipses_pirs_distortion.pkl', 'wb') as f:
-        pickle.dump(results, f)
+    # with open('results_ellipses_pirs_distortion.pkl', 'wb') as f:
+    #     pickle.dump(results, f)
         # plt.figure(figsize=(8, 5))
         # plt.scatter(hm_list, qt_list, label='Data')
         # plt.title('Curve Fitting Using Q-Gaussian Function')
         # plt.legend()
         # plt.savefig(f'plot(hm_list_qt_list_it={iteration}).png')
         # plt.close()
+
+    pool_size = 10
+
+    # Создаем пул процессов
+    with multiprocessing.Pool(pool_size) as pool:
+        # Список задач (например, числа от 0 до 19)
+        tasks = tuple(np.arange(1.000001, 3, 0.2))
+
+        # Распределение задач между процессами и сбор результатов
+        results = pool.map(sumple_dependences, tasks)
+
+        # Вывод результатов
+        print(results)
 
     # plt.figure(figsize=(8, 5))
     # plt.scatter(hm_list, qt_list, label='Data')
