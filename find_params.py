@@ -67,6 +67,59 @@ def quadratic_error_c(variables, *args):
     return np.sum((y - y_pred) ** 2)/np.size(y_pred)
 
 
+def quadratic_error_bfix(variables, *args):
+    G1, q1, Ampl1 = variables
+    Bres1 = 3250
+    x = args[0]
+    y = args[1]
+    a1 = pow(2.0, q1 - 1.0) - 1.0
+    a2 = -1.0 / (q1 - 1.0)
+    SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
+    f_max = np.max(SS)
+    St = Ampl1 * (SS / (2.0 * f_max))
+    return np.sum((y - St) ** 2)/np.size(St)
+
+
+def quadratic_error_bfix(variables, *args):
+    G1, q1, Ampl1 = variables
+    Bres1 = 3250
+    x = args[0]
+    y = args[1]
+    a1 = pow(2.0, q1 - 1.0) - 1.0
+    a2 = -1.0 / (q1 - 1.0)
+    SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
+    f_max = np.max(SS)
+    St = Ampl1 * (SS / (2.0 * f_max))
+    return np.sum((y - St) ** 2)/np.size(St)
+
+
+def quadratic_error_bfix_ampl(variables, *args):
+    G1, q1 = variables
+    Bres1 = 3250
+    x = args[0]
+    y = args[1]
+    Ampl1 = args[2]
+    a1 = pow(2.0, q1 - 1.0) - 1.0
+    a2 = -1.0 / (q1 - 1.0)
+    SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
+    f_max = np.max(SS)
+    St = Ampl1 * (SS / (2.0 * f_max))
+    return np.sum((y - St) ** 2)/np.size(St)
+
+
+def quadratic_error_bfix_lm(variables, x, y):
+    G1 = variables['G']
+    q1 = variables['q']
+    Ampl1 = variables['Ampl']
+    Bres1 = 3250
+    a1 = pow(2.0, q1 - 1.0) - 1.0
+    a2 = -1.0 / (q1 - 1.0)
+    SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
+    f_max = np.max(SS)
+    St = Ampl1 * (SS / (2.0 * f_max))
+    return y - St
+
+
 dBpp_theor = 0
 dBpp_exper = 0
 
@@ -104,7 +157,7 @@ def quadratic_error_two(variables, *args):
 
 
 def objective_one(trial, x_data, y_data):
-    B_0 = trial.suggest_float("B1", 3254, 3256)
+    B_0 = trial.suggest_float("B1", 3249, 3251)
     G_0 = 2
     q_0 = 2
     Ampl_0 = 0.7
@@ -300,7 +353,7 @@ def find_one_tsall_param(
     objective_with_data = partial(objective_one, x_data=X_list, y_data=Y_list)
     study = optuna.create_study(direction="minimize", sampler=TPESampler())
     study.optimize(objective_with_data, n_trials=100, callbacks=[check_stop])
-    return None
+    return study.best_trial.user_attrs['res']
 
 
 def find_two_tsall_param(

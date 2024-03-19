@@ -7,7 +7,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.optimize import curve_fit
+from scipy.optimize import minimize, shgo
+from lmfit import minimize as minimize_lm, Parameters, Minimizer
+from scipy.optimize import curve_fit, differential_evolution
 from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
     INITAL_AMPL_TSAL, INITAL_G_PIRS, INITAL_G_TSAL, INITAL_M_PIRS, \
     INITAL_Q_TSAL, ITERATION_DEPTH, PIRSONIAN_MODE, TSALLIAN_MODE, \
@@ -16,7 +18,7 @@ from consts import BOUNDS_PIRS, BOUNDS_TSAL, INITAL_AMPL_PIRS, \
 from derivative import derivatives_find
 from ellips_param import find_ellips_param
 from etl import read_points_from_file, lists_to_excel
-from find_params import find_one_tsall_param, find_one_tsall_param_b, find_param, find_two_tsall_param
+from find_params import find_one_tsall_param, find_one_tsall_param_b, find_param, find_two_tsall_param, quadratic_error_bfix, quadratic_error_bfix_ampl, quadratic_error_bfix_lm, quadratic_error_c
 from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
 from tsallis_fix_b import find_params_two_tsallis_fixB
 
@@ -458,8 +460,97 @@ def sumple_dependences(q):
 # plt.savefig(f'grapghfdhgf')
 
 
+def model_two_tsallis():
+    A1 = 1
+    G1 = 1
+    q = 2.0
+    A2_list = [1]
+    G2_list = [0.25, 0.5, 0.75, 1.25, 1.5, 1.75, 2]
+    X_list = np.arange(3240, 3260, 0.02)
+    plt.figure(figsize=(10, 6))
+    table_parametr = pd.DataFrame(
+                columns=["(dBpp_exp-dBpp_theor)/dBpp_exp", "A1/A2", "G1/G2", "funmin"]
+        )
+    for G2 in G2_list:
+        for A2 in A2_list:
+            Y_list = simple_tsallis(X_list, A1, q, G1) + simple_tsallis(X_list, A2, q, G2)
+            dBpp_exp = X_list[np.argmin(Y_list)] - X_list[np.argmax(Y_list)]
+            Y_list = Y_list/(max(Y_list) - min(Y_list))
+            G_0 = 2
+            q_0 = 2
+            Ampl_0 = 1.0
+            dG = 1
+            dq = 0.99999
+            dAmp = 0.49999
+
+            initial_guess = [G_0, q_0, Ampl_0]
+            bounds = [
+                (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+                (Ampl_0-dAmp, Ampl_0+dAmp)
+            ]
+
+            res = minimize(
+                quadratic_error_bfix,
+                initial_guess,
+                args=(X_list, Y_list),
+                method='l-bfgs-b',
+                bounds=bounds,
+                tol=1e-5,
+                options={
+                    'disp': True,
+                    'maxiter': 1000000000000,
+                    'ftol': 1e-20,
+                    'gtol': 1e-20,
+                    'eps': 1e-5,
+                    'maxls': 100
+                }
+            )
+
+            G_0 = res.x[0]
+            q_0 = res.x[1]
+            Ampl = res.x[2]
+            initial_guess = [G_0, q_0]
+            bounds = [
+                (G_0-dG, G_0+dG), (q_0-dq, q_0+dq)
+            ]
+            res = minimize(
+                quadratic_error_bfix_ampl,
+                initial_guess,
+                args=(X_list, Y_list, Ampl),
+                method='l-bfgs-b',
+                bounds=bounds,
+                tol=1e-5,
+                options={
+                    'disp': True,
+                    'maxiter': 1000000000000,
+                    'ftol': 1e-20,
+                    'gtol': 1e-20,
+                    'eps': 1e-5,
+                    'maxls': 100
+                }
+            )
+#             params = Parameters()
+#             params.add('G', value=2, min=1, max=3)
+#             params.add('q', value=2, min=1.0000001, max=3)
+#             params.add('Ampl', value=1, min=0.7, max=1.3)
+#  # толерантность к изменению переменных решения
+#             minimizer = Minimizer(quadratic_error_bfix_lm, params, fcn_args=(X_list, Y_list))
+#             result = minimizer.minimize(method='dogleg')
+            Y_theor = simple_tsallis_(X_list, res.x[1], res.x[0], 3250, Ampl, 0)
+            dBpp_theor = X_list[np.argmin(Y_theor)] - X_list[np.argmax(Y_theor)]
+            new_row = pd.Series(
+                [abs(dBpp_exp-dBpp_theor)/dBpp_theor, A1/A2, G1/G2, res.fun],
+                index=table_parametr.columns
+            )
+            table_parametr = table_parametr._append(new_row, ignore_index=True)
+        plt.plot(table_parametr['(dBpp_exp-dBpp_theor)/dBpp_exp'], table_parametr['A1/A2'], '-o', label=f'G1/G2 = {G1/G2}')
+    plt.show()
+    print(res)
+
+
 def main():
 
+    model_two_tsallis()
     # find_dependece(2.0)
 
     # pool_size = 10
@@ -484,18 +575,18 @@ def main():
         # plt.savefig(f'plot(hm_list_qt_list_it={iteration}).png')
         # plt.close()
 
-    pool_size = 10
+    # pool_size = 10
 
-    # Создаем пул процессов
-    with multiprocessing.Pool(pool_size) as pool:
-        # Список задач (например, числа от 0 до 19)
-        tasks = tuple(np.arange(1.000001, 3, 0.2))
+    # # Создаем пул процессов
+    # with multiprocessing.Pool(pool_size) as pool:
+    #     # Список задач (например, числа от 0 до 19)
+    #     tasks = tuple(np.arange(1.000001, 3, 0.2))
 
-        # Распределение задач между процессами и сбор результатов
-        results = pool.map(sumple_dependences, tasks)
+    #     # Распределение задач между процессами и сбор результатов
+    #     results = pool.map(sumple_dependences, tasks)
 
-        # Вывод результатов
-        print(results)
+    #     # Вывод результатов
+    #     print(results)
 
     # plt.figure(figsize=(8, 5))
     # plt.scatter(hm_list, qt_list, label='Data')
