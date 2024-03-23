@@ -19,7 +19,7 @@ from derivative import derivatives_find
 from ellips_param import find_ellips_param
 from etl import read_points_from_file, lists_to_excel
 from find_params import find_one_tsall_param, find_one_tsall_param_b, find_param, find_two_tsall_param, quadratic_error_bfix, quadratic_error_bfix_ampl, quadratic_error_bfix_lm, quadratic_error_c
-from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_
+from tsallis import Tsallian, ellips, pirsonian, simple_tsallis, simple_tsallis_, simple_tsallis_ampl
 from tsallis_fix_b import find_params_two_tsallis_fixB
 
 
@@ -464,25 +464,30 @@ def model_two_tsallis():
     A1 = 1
     G1 = 1
     q = 2.0
-    A2_list = [1]
-    G2_list = [0.25, 0.5, 0.75, 1.25, 1.5, 1.75, 2]
-    X_list = np.arange(3240, 3260, 0.02)
+    A2_list = np.hstack((np.arange(0.01, 1.5, 0.05), np.arange(1.5, 10, 0.1)))
+    G2_list = [1.5, 2, 2.5, 3]
+    X_list = np.arange(3240, 3260, 0.002)
     plt.figure(figsize=(10, 6))
-    table_parametr = pd.DataFrame(
-                columns=["(dBpp_exp-dBpp_theor)/dBpp_exp", "A1/A2", "G1/G2", "funmin"]
-        )
+    # table_parametr = pd.DataFrame(
+    #             columns=["(dBpp_exp-dBpp_theor)/dBpp_exp", "A2/A1", "G1/G2", "funmin"]
+    #     )
+    results = []
+    color = {'2.0': 'red', '2.5': ,'3':}
+    sns.set(style="whitegrid")
     for G2 in G2_list:
+        table_parametr = pd.DataFrame(
+                columns=["(dBpp_exp-dBpp_theor)/dBpp_exp", "A2/A1", "G1/G2", "funmin"]
+        )
         for A2 in A2_list:
-            Y_list = simple_tsallis(X_list, A1, q, G1) + simple_tsallis(X_list, A2, q, G2)
+            Y_list = simple_tsallis_ampl(X_list, A1, q, G1) + simple_tsallis_ampl(X_list, A2, q, G2)
             dBpp_exp = X_list[np.argmin(Y_list)] - X_list[np.argmax(Y_list)]
-            Y_list = Y_list/(max(Y_list) - min(Y_list))
-            G_0 = 2
+            Y_list = Y_list/(np.max(Y_list) - np.min(Y_list))
+            G_0 = dBpp_exp
             q_0 = 2
-            Ampl_0 = 1.0
+            Ampl_0 = 1
             dG = 1
             dq = 0.99999
-            dAmp = 0.49999
-
+            dAmp = 0.999999
             initial_guess = [G_0, q_0, Ampl_0]
             bounds = [
                 (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
@@ -495,13 +500,13 @@ def model_two_tsallis():
                 args=(X_list, Y_list),
                 method='l-bfgs-b',
                 bounds=bounds,
-                tol=1e-5,
+                tol=1e-10,
                 options={
                     'disp': True,
                     'maxiter': 1000000000000,
                     'ftol': 1e-20,
                     'gtol': 1e-20,
-                    'eps': 1e-5,
+                    'eps': 1e-10,
                     'maxls': 100
                 }
             )
@@ -509,9 +514,12 @@ def model_two_tsallis():
             G_0 = res.x[0]
             q_0 = res.x[1]
             Ampl = res.x[2]
-            initial_guess = [G_0, q_0]
+            c = 0
+            dc = 0.00001
+            initial_guess = [G_0, q_0, c]
             bounds = [
-                (G_0-dG, G_0+dG), (q_0-dq, q_0+dq)
+                (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+                (c-dc, c+dc)
             ]
             res = minimize(
                 quadratic_error_bfix_ampl,
@@ -519,13 +527,38 @@ def model_two_tsallis():
                 args=(X_list, Y_list, Ampl),
                 method='l-bfgs-b',
                 bounds=bounds,
-                tol=1e-5,
+                tol=1e-10,
                 options={
                     'disp': True,
                     'maxiter': 1000000000000,
                     'ftol': 1e-20,
                     'gtol': 1e-20,
-                    'eps': 1e-5,
+                    'eps': 1e-10,
+                    'maxls': 100
+                }
+            )
+
+            G_0 = res.x[0]
+            q_0 = res.x[1]
+            c = res.x[2]
+            initial_guess = [G_0, q_0, c]
+            bounds = [
+                (G_0-dG, G_0+dG), (q_0-dq, q_0+dq),
+                (c-dc, c+dc)
+            ]
+            res = minimize(
+                quadratic_error_bfix_ampl,
+                initial_guess,
+                args=(X_list, Y_list, Ampl),
+                method='l-bfgs-b',
+                bounds=bounds,
+                tol=1e-10,
+                options={
+                    'disp': True,
+                    'maxiter': 1000000000000,
+                    'ftol': 1e-20,
+                    'gtol': 1e-20,
+                    'eps': 1e-10,
                     'maxls': 100
                 }
             )
@@ -536,14 +569,21 @@ def model_two_tsallis():
 #  # толерантность к изменению переменных решения
 #             minimizer = Minimizer(quadratic_error_bfix_lm, params, fcn_args=(X_list, Y_list))
 #             result = minimizer.minimize(method='dogleg')
-            Y_theor = simple_tsallis_(X_list, res.x[1], res.x[0], 3250, Ampl, 0)
-            dBpp_theor = X_list[np.argmin(Y_theor)] - X_list[np.argmax(Y_theor)]
+            Y_theor = simple_tsallis_ampl(X_list, Ampl, res.x[1], res.x[0])
+            dBpp_theor = 2*res.x[0]*pow(((res.x[1]-1)/(res.x[1]+1))*(1/(pow(2, res.x[1]-1)-1)), 0.5)
+            # dBpp_theor = X_list[np.argmin(Y_theor)] - X_list[np.argmax(Y_theor)]
             new_row = pd.Series(
-                [abs(dBpp_exp-dBpp_theor)/dBpp_theor, A1/A2, G1/G2, res.fun],
+                [(dBpp_exp-dBpp_theor)/dBpp_exp, A2/A1, G1/G2, res.fun],
                 index=table_parametr.columns
             )
             table_parametr = table_parametr._append(new_row, ignore_index=True)
-        plt.plot(table_parametr['(dBpp_exp-dBpp_theor)/dBpp_exp'], table_parametr['A1/A2'], '-o', label=f'G1/G2 = {G1/G2}')
+        results.append(table_parametr)
+        sns.scatterplot(data=table_parametr, x='A2/A1', y='(dBpp_exp-dBpp_theor)/dBpp_exp', color='red', marker='o', s=100, label=f'G1/G2 = {G1/G2}')
+        # plt.plot(table_parametr['A2/A1'], table_parametr['(dBpp_exp-dBpp_theor)/dBpp_exp'], '-o', label=f'G1/G2 = {G1/G2}')
+    plt.title('Относительная разность peak-to-peak ширины', fontsize=16)
+    plt.xlabel('$A2/A1$', fontsize=14)
+    plt.ylabel('$(dBpp_exp-dBpp_theor)/dBpp_exp$', fontsize=14)
+    sns.scatterplot()
     plt.show()
     print(res)
 

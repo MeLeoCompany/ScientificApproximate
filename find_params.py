@@ -67,17 +67,17 @@ def quadratic_error_c(variables, *args):
     return np.sum((y - y_pred) ** 2)/np.size(y_pred)
 
 
-def quadratic_error_bfix(variables, *args):
-    G1, q1, Ampl1 = variables
-    Bres1 = 3250
-    x = args[0]
-    y = args[1]
-    a1 = pow(2.0, q1 - 1.0) - 1.0
-    a2 = -1.0 / (q1 - 1.0)
-    SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
-    f_max = np.max(SS)
-    St = Ampl1 * (SS / (2.0 * f_max))
-    return np.sum((y - St) ** 2)/np.size(St)
+# def quadratic_error_bfix(variables, *args):
+#     G1, q1, Ampl1 = variables
+#     Bres1 = 3250
+#     x = args[0]
+#     y = args[1]
+#     a1 = pow(2.0, q1 - 1.0) - 1.0
+#     a2 = -1.0 / (q1 - 1.0)
+#     SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
+#     f_max = np.max(SS)
+#     St = Ampl1 * (SS / (2.0 * f_max))
+#     return np.sum((y - St) ** 2)/np.size(St)
 
 
 def quadratic_error_bfix(variables, *args):
@@ -87,23 +87,21 @@ def quadratic_error_bfix(variables, *args):
     y = args[1]
     a1 = pow(2.0, q1 - 1.0) - 1.0
     a2 = -1.0 / (q1 - 1.0)
-    SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
-    f_max = np.max(SS)
-    St = Ampl1 * (SS / (2.0 * f_max))
+    SS = - np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * (x - Bres1)
+    St = Ampl1 * SS
     return np.sum((y - St) ** 2)/np.size(St)
 
 
 def quadratic_error_bfix_ampl(variables, *args):
-    G1, q1 = variables
+    G1, q1, c = variables
     Bres1 = 3250
     x = args[0]
     y = args[1]
     Ampl1 = args[2]
     a1 = pow(2.0, q1 - 1.0) - 1.0
     a2 = -1.0 / (q1 - 1.0)
-    SS = 2.0 * a2 * np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * a1 * ((x - Bres1) / np.power(G1, 2))
-    f_max = np.max(SS)
-    St = Ampl1 * (SS / (2.0 * f_max))
+    SS = - np.power(1.0 + a1 * np.power((x - Bres1) / G1, 2.0), a2 - 1.0) * (x - Bres1)
+    St = Ampl1 * SS + c
     return np.sum((y - St) ** 2)/np.size(St)
 
 

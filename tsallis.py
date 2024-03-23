@@ -18,6 +18,15 @@ def simple_tsallis(x, amplt, q, G):
     return St
 
 
+def simple_tsallis_ampl(x, amplt, q, G):
+    H_0 = 3250.0
+    a1 = pow(2.0, q - 1.0) - 1.0
+    a2 = -1.0 / (q - 1.0)
+    SS = - np.power(1.0 + a1 * np.power((x - H_0) / G, 2), a2 - 1.0) * (x - H_0)
+    St = amplt * SS
+    return St
+
+
 def simple_tsallis_(x, q, G, H_0, Yt, dY):
     a1 = pow(2.0, q - 1.0) - 1.0
     a2 = -1.0 / (q - 1.0)
