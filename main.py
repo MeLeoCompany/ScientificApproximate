@@ -472,7 +472,8 @@ def model_two_tsallis():
     #             columns=["(dBpp_exp-dBpp_theor)/dBpp_exp", "A2/A1", "G1/G2", "funmin"]
     #     )
     results = []
-    color = {'2.0': 'red', '2.5': ,'3':}
+    colors = {'1.5': 'green', '2': 'red', '2.5': 'blue', '3': 'grey'}
+    symbols = {'1.5': "o", '2': "s", '2.5': "D", '3': "^"}
     sns.set(style="whitegrid")
     for G2 in G2_list:
         table_parametr = pd.DataFrame(
@@ -578,7 +579,13 @@ def model_two_tsallis():
             )
             table_parametr = table_parametr._append(new_row, ignore_index=True)
         results.append(table_parametr)
-        sns.scatterplot(data=table_parametr, x='A2/A1', y='(dBpp_exp-dBpp_theor)/dBpp_exp', color='red', marker='o', s=100, label=f'G1/G2 = {G1/G2}')
+        labels = r'$\frac{G1}{G2} = \frac{%f}{%f}$' % (G1, G2)
+        sns.lineplot(
+            data=table_parametr, x='A2/A1',
+            y='(dBpp_exp-dBpp_theor)/dBpp_exp',
+            color=colors[str(G2)], marker=symbols[str(G2)],
+            markersize=10, label=labels
+        )
         # plt.plot(table_parametr['A2/A1'], table_parametr['(dBpp_exp-dBpp_theor)/dBpp_exp'], '-o', label=f'G1/G2 = {G1/G2}')
     plt.title('Относительная разность peak-to-peak ширины', fontsize=16)
     plt.xlabel('$A2/A1$', fontsize=14)
