@@ -579,17 +579,18 @@ def model_two_tsallis():
             )
             table_parametr = table_parametr._append(new_row, ignore_index=True)
         results.append(table_parametr)
-        labels = r'$\frac{G1}{G2} = \frac{%f}{%f}$' % (G1, G2)
+        labels = r'$\frac{G1}{G2} = \frac{%.2f}{%.2f}$' % (G1, G2)
         sns.lineplot(
             data=table_parametr, x='A2/A1',
             y='(dBpp_exp-dBpp_theor)/dBpp_exp',
             color=colors[str(G2)], marker=symbols[str(G2)],
             markersize=10, label=labels
         )
+        plt.legend(fontsize='14')
         # plt.plot(table_parametr['A2/A1'], table_parametr['(dBpp_exp-dBpp_theor)/dBpp_exp'], '-o', label=f'G1/G2 = {G1/G2}')
     plt.title('Относительная разность peak-to-peak ширины', fontsize=16)
     plt.xlabel('$A2/A1$', fontsize=14)
-    plt.ylabel('$(dBpp_exp-dBpp_theor)/dBpp_exp$', fontsize=14)
+    plt.ylabel('$(dBpp-dBpp*)/dBpp$', fontsize=14)
     sns.scatterplot()
     plt.show()
     print(res)
