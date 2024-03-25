@@ -477,7 +477,7 @@ def model_two_tsallis():
     sns.set(style="whitegrid")
     for G2 in G2_list:
         table_parametr = pd.DataFrame(
-                columns=["(dBpp_exp-dBpp_theor)/dBpp_exp", "A2/A1", "G1/G2", "funmin"]
+                columns=["(dBpp_exp-dBpp_theor)/dBpp_exp", "A2/A1", "G1/G2", "funmin", "q"]
         )
         for A2 in A2_list:
             Y_list = simple_tsallis_ampl(X_list, A1, q, G1) + simple_tsallis_ampl(X_list, A2, q, G2)
@@ -574,23 +574,31 @@ def model_two_tsallis():
             dBpp_theor = 2*res.x[0]*pow(((res.x[1]-1)/(res.x[1]+1))*(1/(pow(2, res.x[1]-1)-1)), 0.5)
             # dBpp_theor = X_list[np.argmin(Y_theor)] - X_list[np.argmax(Y_theor)]
             new_row = pd.Series(
-                [(dBpp_exp-dBpp_theor)/dBpp_exp, A2/A1, G1/G2, res.fun],
+                [(dBpp_exp-dBpp_theor)/dBpp_exp, A2/A1, G1/G2, res.fun, res.x[1]],
                 index=table_parametr.columns
             )
             table_parametr = table_parametr._append(new_row, ignore_index=True)
         results.append(table_parametr)
         labels = r'$\frac{G1}{G2} = \frac{%.2f}{%.2f}$' % (G1, G2)
+        # sns.lineplot(
+        #     data=table_parametr, x='A2/A1',
+        #     y='(dBpp_exp-dBpp_theor)/dBpp_exp',
+        #     color=colors[str(G2)], marker=symbols[str(G2)],
+        #     markersize=10, label=labels
+        # )
         sns.lineplot(
-            data=table_parametr, x='A2/A1',
-            y='(dBpp_exp-dBpp_theor)/dBpp_exp',
+            data=table_parametr, x='q',
+            y='funmin',
             color=colors[str(G2)], marker=symbols[str(G2)],
             markersize=10, label=labels
         )
         plt.legend(fontsize='14')
         # plt.plot(table_parametr['A2/A1'], table_parametr['(dBpp_exp-dBpp_theor)/dBpp_exp'], '-o', label=f'G1/G2 = {G1/G2}')
     plt.title('Относительная разность peak-to-peak ширины', fontsize=16)
-    plt.xlabel('$A2/A1$', fontsize=14)
-    plt.ylabel('$(dBpp-dBpp*)/dBpp$', fontsize=14)
+    plt.xlabel('$q$', fontsize=14)
+    plt.ylabel('$funmin$', fontsize=14)
+    # plt.xlabel('$A2/A1$', fontsize=14)
+    # plt.ylabel('$(dBpp-dBpp*)/dBpp$', fontsize=14)
     sns.scatterplot()
     plt.show()
     print(res)
